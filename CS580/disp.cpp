@@ -103,13 +103,13 @@ int GzInitDisplay(GzDisplay	*display)
 		return GZ_FAILURE;
 
 	// loop through all GzPixels in the display
-	// display rows
+	// display rows (Y coords)
 	for( int row = 0; row < display->xres; row++ )
 	{
-		// display columns
+		// display columns (X coords)
 		for( int col = 0; col < display->yres; col++ )
 		{
-			int idx = row * display->yres + col;
+			int idx = ARRAY( col, row );
 
 			// use brown color for background
 			display->fbuf[idx].red = 153 << 4;
@@ -156,8 +156,8 @@ int GzPutDisplay(GzDisplay *display, int i, int j, GzIntensity r, GzIntensity g,
 	else if( b > RGB_MAX_INTENSITY )
 		b = RGB_MAX_INTENSITY;
 
-	// note: i => columns (x coords), j => rows (y coords)
-	int idx = display->xres * j + i;
+	// note: i => columns (X coords), j => rows (Y coords)
+	int idx = ARRAY( i, j );
 
 	display->fbuf[idx].red = r;
 	display->fbuf[idx].green = g;
@@ -183,7 +183,8 @@ int GzGetDisplay(GzDisplay *display, int i, int j, GzIntensity *r, GzIntensity *
 	if( i < 0 || j < 0 || i >= display->xres || j >= display->yres )
 		return GZ_FAILURE;
 
-	int idx = j * display->xres + i;
+	// note: i => columns (X coords), j => rows (Y coords)
+	int idx = ARRAY( i, j );
 
 	*r = display->fbuf[idx].red;
 	*g = display->fbuf[idx].green;
@@ -216,13 +217,13 @@ int GzFlushDisplay2FrameBuffer(char* framebuffer, GzDisplay *display)
 	if( !framebuffer || !display )
 		return GZ_FAILURE;
 
-	// display rows
+	// display rows (Y coords)
 	for( int row = 0; row < display->xres; row++ )
 	{
-		// display columns
+		// display columns (X coords)
 		for( int col = 0; col < display->yres; col++ )
 		{
-			int fbufIdx = row * display->xres + col;
+			int fbufIdx = ARRAY( col, row );
 
 			char * blueLoc = &( framebuffer[fbufIdx * 3] ); // each idx has 3 chars: B, G, & R
 			char * greenLoc = blueLoc + sizeof( char );
