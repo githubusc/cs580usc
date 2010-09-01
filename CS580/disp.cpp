@@ -3,8 +3,6 @@
 #include	"Gz.h"
 #include	"disp.h"
 
-#define RGB_MAX_INTENSITY 4095
-
 int GzNewFrameBuffer(char** framebuffer, int width, int height)
 {
 /* create a framebuffer:
