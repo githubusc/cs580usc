@@ -31,6 +31,8 @@ typedef struct {
 #define	MAXXRES	1024	/* put some bounds on size in case of error */
 #define	MAXYRES	1024
 
+#define RGB_MAX_INTENSITY 4095
+
 #define	ARRAY(x,y)	(x+(y*display->xres))	/* simplify fbuf indexing */
 
 // Function declaration
