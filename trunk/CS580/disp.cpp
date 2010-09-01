@@ -183,7 +183,7 @@ int GzGetDisplay(GzDisplay *display, int i, int j, GzIntensity *r, GzIntensity *
 	if( i < 0 || j < 0 || i >= display->xres || j >= display->yres )
 		return GZ_FAILURE;
 
-	int idx = i * display->xres + j;
+	int idx = j * display->xres + i;
 
 	*r = display->fbuf[idx].red;
 	*g = display->fbuf[idx].green;
