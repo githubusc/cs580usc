@@ -235,9 +235,9 @@ int GzFlushDisplay2FrameBuffer(char* framebuffer, GzDisplay *display)
 			char green = display->fbuf[fbufIdx].green >> 4;
 			char blue = display->fbuf[fbufIdx].blue >> 4;
 
-			memcpy( blueLoc, &blue, sizeof( char ) );
-			memcpy( greenLoc, &green, sizeof( char ) );
-			memcpy( redLoc, &red, sizeof( char ) );
+			*blueLoc = blue;
+			*greenLoc = green;
+			*redLoc = red;
 		}
 	}
 
