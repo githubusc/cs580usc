@@ -30,6 +30,6 @@ Application::Application()
 Application::~Application()
 {
 	if(m_pFrameBuffer != NULL)
-		delete m_pFrameBuffer;
+		delete [] m_pFrameBuffer;
 }
 

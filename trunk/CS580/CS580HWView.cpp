@@ -40,6 +40,7 @@ CCS580HWView::CCS580HWView()
 
 CCS580HWView::~CCS580HWView()
 {
+	delete m_pApplication;
 }
 
 BOOL CCS580HWView::PreCreateWindow(CREATESTRUCT& cs)
