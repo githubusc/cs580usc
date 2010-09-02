@@ -68,6 +68,10 @@ int GzFreeDisplay(GzDisplay	*display)
 {
 /* clean up, free memory */
 
+	// check for bad pointer
+	if( !display )
+		return GZ_FAILURE;
+
 	free( display->fbuf );
 	display->fbuf = NULL;
 
