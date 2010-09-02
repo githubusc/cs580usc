@@ -201,6 +201,33 @@ int GzFlushDisplay2File(FILE* outfile, GzDisplay *display)
 
 	/* write pixels to ppm file based on display class -- "P6 %d %d 255\r" */
 
+	if( !outfile || ! display )
+		return GZ_FAILURE;
+
+	char buffer[1024];
+
+	// create and write out header
+	sprintf_s( buffer, 1024, "P6 %d %d 255\r", display->xres, display->yres );
+	fwrite( buffer, sizeof( char ), strlen( buffer ), outfile );
+
+	for( int row = 0; row < display->yres; row++ )
+	{
+		for( int col = 0; col < display->xres; col++ )
+		{
+			// clear the buffer just in case
+			memset( buffer, 0, sizeof( 1024 ) );
+
+			int idx = ARRAY( col, row );
+
+			// we want binary representation in the file, so shift 4 bits over and write RGB chars to file
+			sprintf_s( buffer, 1024, "%c%c%c", 
+				display->fbuf[idx].red >> 4, 
+				display->fbuf[idx].green >> 4, 
+				display->fbuf[idx].blue >> 4 );
+			fwrite( buffer, sizeof( char ), strlen( buffer ), outfile );
+		}
+	}
+
 	return GZ_SUCCESS;
 }
 
