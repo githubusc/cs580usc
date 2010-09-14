@@ -32,7 +32,7 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay *display
 	tmpRenderer->display = display;
 	tmpRenderer->open = 0; // zero value indicates that renderer is closed
 
-	// the rest of the struct members will be initialized on begin render?
+	// the rest of the struct members will be initialized in GzBeginRender.
 
 	*render = tmpRenderer;
 
@@ -64,6 +64,17 @@ int GzBeginRender(GzRender	*render)
 /* 
 - set up for start of each frame - init frame buffer
 */
+	// check for bad pointer
+	if( !render )
+		return GZ_FAILURE;
+
+	render->open = 1; // non-zero value indicates that renderer is now open
+
+	// use red for default flat color
+	render->flatcolor[RED] = 1; 
+	render->flatcolor[GREEN] = 0;
+	render->flatcolor[BLUE] = 0;
+
 	return GZ_SUCCESS;
 }
 
