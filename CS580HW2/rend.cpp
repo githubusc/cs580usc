@@ -4,6 +4,12 @@
 #include	"Gz.h"
 #include	"rend.h"
 
+#define SCANLINE_METHOD 0
+#define LEE_METHOD 1
+
+// flag to toggle between rasterizing methods
+// NOTE: we're only required to implement ONE of these. I just did both for fun.
+int rasterizeMethod = LEE_METHOD;
 
 int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay *display)
 {
@@ -104,7 +110,37 @@ int GzPutTriangle(GzRender *render, int	numParts, GzToken *nameList,
 - Invoke the scan converter and return an error code
 TRANSLATION:
 Similar to GzPutAttribute but check for GZ_POSITION and GZ_NULL_TOKEN in nameList
+Takes in a list of triangles, uses the scan-line or LEE method of rasterizing.
+Then calls GzPutDisplay() to draw those pixels to the display.
 */
+	// check for bad pointers
+	if( !render || !nameList || !valueList )
+		return GZ_FAILURE;
+
+	for( int i = 0; i < numParts; i++ )
+	{
+		if( nameList[i] == GZ_NULL_TOKEN )
+		{
+			// do nothing - no values
+		}
+		else if( nameList[i] == GZ_POSITION )
+		{
+			// rasterize using scanlines
+			if( rasterizeMethod == SCANLINE_METHOD )
+			{
+			}
+			// rasterize using LEE
+			else if( rasterizeMethod == LEE_METHOD )
+			{
+			}
+			// unrecognized rasterization method
+			else
+			{
+				fprintf( stderr, "Error: unknown rasterization method!!!\n" );
+				return GZ_FAILURE;
+			}
+		}
+	}
 
 	return GZ_SUCCESS;
 }
