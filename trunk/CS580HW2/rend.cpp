@@ -11,6 +11,9 @@
 // NOTE: we're only required to implement ONE of these. I just did both for fun.
 int rasterizeMethod = LEE_METHOD;
 
+// helper function for sorting triangle vertices (used with qsort)
+int sortByYCoord( const void * c1, const void * c2 );
+
 int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay *display)
 {
 /* 
@@ -136,17 +139,22 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 		}
 		else if( nameList[i] == GZ_POSITION )
 		{
+			GzCoord * verts = static_cast<GzCoord *>( valueList[i] );
+
+			// rasterize this triangle
+			switch( rasterizeMethod )
+			{
 			// rasterize using scanlines
-			if( rasterizeMethod == SCANLINE_METHOD )
-			{
-			}
+			case SCANLINE_METHOD:
+				fprintf( stderr, "Error: don't know how to rasterize with scanlines yet.\n" );
+				return GZ_FAILURE;
+				break;
 			// rasterize using LEE
-			else if( rasterizeMethod == LEE_METHOD )
-			{
-			}
+			case LEE_METHOD:
+				// use convention of orienting all edges to point in counter-clockwise direction
+				break;
 			// unrecognized rasterization method
-			else
-			{
+			default:
 				fprintf( stderr, "Error: unknown rasterization method!!!\n" );
 				return GZ_FAILURE;
 			}
@@ -163,3 +171,25 @@ short	ctoi(float color)		/* convert float color to GzIntensity short */
   return(short)((int)(color * ((1 << 12) - 1)));
 }
 
+void orderTriVertsCCW( GzCoord * verts )
+{
+	// first sort vertices by Y coordinate (low to high)
+	qsort( verts, 3, sizeof( GzCoord ), sortByYCoord );
+}
+
+int sortByYCoord( const void * c1, const void * c2 )
+{
+	GzCoord * coord1 = ( GzCoord * )c1;
+	GzCoord * coord2 = ( GzCoord * )c2;
+
+	// find the difference in Y coordinate values
+	float diff = ( *coord2 )[1] - ( *coord1 )[1];
+
+	// need to return an int, so just categorize by sign
+	if( diff < 0 )
+		return -1;
+	else if( diff > 0 )
+		return 1;
+	else
+		return 0;
+}
