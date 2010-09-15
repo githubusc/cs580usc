@@ -11,8 +11,24 @@
 // NOTE: we're only required to implement ONE of these. I just did both for fun.
 int rasterizeMethod = LEE_METHOD;
 
-// helper function for sorting triangle vertices (used with qsort)
-int sortByYCoord( const void * c1, const void * c2 );
+enum EdgeType
+{
+	LEFT,
+	RIGHT,
+	TOP,
+	BOTTOM
+};
+
+typedef struct
+{
+	GzCoord start;
+	GzCoord end;
+	EdgeType type;
+} Edge;
+
+/*** HELPER FUNCTION DECLARATIONS ***/
+int sortByYThenXCoord( const void * c1, const void * c2 ); // helper function for sorting tri verts (used with qsort)
+void orderTriVertsCCW( Edge edges[3], GzCoord * verts ); // algorithm to sort vertices such that adjacent verts form CCW edges (e.g. 0-1, 1-2, 2-0)
 
 int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay *display)
 {
@@ -152,6 +168,8 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 			// rasterize using LEE
 			case LEE_METHOD:
 				// use convention of orienting all edges to point in counter-clockwise direction
+				Edge edges[3];
+				orderTriVertsCCW( edges, verts );
 				break;
 			// unrecognized rasterization method
 			default:
@@ -171,25 +189,55 @@ short	ctoi(float color)		/* convert float color to GzIntensity short */
   return(short)((int)(color * ((1 << 12) - 1)));
 }
 
-void orderTriVertsCCW( GzCoord * verts )
+void orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 {
 	// first sort vertices by Y coordinate (low to high)
-	qsort( verts, 3, sizeof( GzCoord ), sortByYCoord );
+	qsort( verts, 3, sizeof( GzCoord ), sortByYThenXCoord );
+
+	/*	
+	 * now the CCW oriented edges are either:
+	 *    0-1, 1-2, 2-0
+	 * OR
+	 *    0-2, 2-1, 1-0
+	 * depending on which are left and right edges.
+	 *
+	 * NOTE: We need to determine left/right & top/bottom edges to establish triangle edge ownership.
+	 *       We'll use the convention that a triangle owns all left & top edges, but not right & bottom edges.
+	 *
+	 * Algorithm to do this:
+	 * IF NO 2 VERTS HAVE SAME Y COORD:
+	 * - Find point along edge 0-2 that has the same Y value as vert 1
+	 * - Compare X value at this point (x') to X value at vert 1 (x1)
+	 *   x' < x1 => edges with vert 1 must be right edges
+	 *   x' > x1 => edges with vert 2 must be left edges
+	 *   x' = x1 shouldn't happen if no 2 verts have the exact same Y coordinate
+	 * IF ANY 2 VERTS HAVE SAME Y COORD: (similar algorithm, but for top/bottom edges)
+	 * 
+	 */
 }
 
-int sortByYCoord( const void * c1, const void * c2 )
+int sortByYThenXCoord( const void * c1, const void * c2 )
 {
 	GzCoord * coord1 = ( GzCoord * )c1;
 	GzCoord * coord2 = ( GzCoord * )c2;
 
 	// find the difference in Y coordinate values
-	float diff = ( *coord2 )[1] - ( *coord1 )[1];
+	float yDiff = ( *coord2 )[1] - ( *coord1 )[1];
 
 	// need to return an int, so just categorize by sign
-	if( diff < 0 )
+	if( yDiff < 0 )
 		return -1;
-	else if( diff > 0 )
+	else if( yDiff > 0 )
 		return 1;
 	else
-		return 0;
+	{
+		// Y coordinates are exactly equal. Now sort by x coord.
+		float xDiff = ( *coord2 )[0] - ( *coord1 )[0];
+		if( xDiff < 0 )
+			return -1;
+		else if( xDiff > 0 )
+			return 1;
+		else
+			return 0; // this means we're dealing with an axis-aligned right triangle
+	}
 }
