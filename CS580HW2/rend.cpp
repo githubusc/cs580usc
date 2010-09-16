@@ -13,10 +13,8 @@ int rasterizeMethod = LEE_METHOD;
 
 enum EdgeType
 {
-	LEFT,
-	RIGHT,
-	TOP,
-	BOTTOM
+	COLORED, // for left & top edges
+	UNCOLORED
 };
 
 typedef struct
@@ -28,7 +26,7 @@ typedef struct
 
 /*** HELPER FUNCTION DECLARATIONS ***/
 int sortByYThenXCoord( const void * c1, const void * c2 ); // helper function for sorting tri verts (used with qsort)
-void orderTriVertsCCW( Edge edges[3], GzCoord * verts ); // algorithm to sort vertices such that adjacent verts form CCW edges (e.g. 0-1, 1-2, 2-0)
+bool orderTriVertsCCW( Edge edges[3], GzCoord * verts ); 
 
 int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay *display)
 {
@@ -189,8 +187,14 @@ short	ctoi(float color)		/* convert float color to GzIntensity short */
   return(short)((int)(color * ((1 << 12) - 1)));
 }
 
-void orderTriVertsCCW( Edge edges[3], GzCoord * verts )
+bool orderTriVertsCCW( Edge * edges, GzCoord * verts )
 {
+	if( !edges || !verts )
+	{
+		fprintf( stderr, "Error: edges or verts are NULL in orderTriVertsCCW()!\n" );
+		return false;
+	}
+
 	// first sort vertices by Y coordinate (low to high)
 	qsort( verts, 3, sizeof( GzCoord ), sortByYThenXCoord );
 
@@ -212,8 +216,90 @@ void orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 	 *   x' > x1 => edges with vert 2 must be left edges
 	 *   x' = x1 shouldn't happen if no 2 verts have the exact same Y coordinate
 	 * IF ANY 2 VERTS HAVE SAME Y COORD: (similar algorithm, but for top/bottom edges)
-	 * 
+	 * - We can arbitrarily determine the orientation of the edges and which are colored/uncolored.
+	 * - Call the verts that make up the horizontal edge v1 & v2, and the other vert v3.
+	 *   v3.y < v1.y => CCW edges: v1 -> v2 (uncolored), v2 -> v3 (uncolored), v3 -> v1 (colored)
+	 *   v3.y > v1.y => CCW edges: v2 -> v1 (colored), v1 -> v3 (colored), v3 -> v2 (uncolored)
 	 */
+
+	// check to see if any two y-coords are equal; since they're ordered by Y first, equal Y coords will be adjacent
+	if( verts[0][1] == verts[1][1] ) // 2 Y coords are equal
+	{
+		// since verts are sorted by Y first, we know that 3rd vert has a greater Y than the other 2
+		memcpy( edges[0].start, verts[1], sizeof( GzCoord ) );
+		memcpy( edges[0].end, verts[0], sizeof( GzCoord ) );
+		edges[0].type = COLORED;
+
+		memcpy( edges[1].start, verts[0], sizeof( GzCoord ) );
+		memcpy( edges[1].end, verts[2], sizeof( GzCoord ) );
+		edges[1].type = COLORED;
+
+		memcpy( edges[2].start, verts[2], sizeof( GzCoord ) );
+		memcpy( edges[2].end, verts[1], sizeof( GzCoord ) );
+		edges[2].type = UNCOLORED;
+	}
+	else if( verts[1][1] == verts[2][1] ) // 2 Y coords are equal
+	{
+		// since verts are sorted by Y first, we know that the 1st vert has a smaller Y than the other 2
+		memcpy( edges[0].start, verts[0], sizeof( GzCoord ) );
+		memcpy( edges[0].end, verts[1], sizeof( GzCoord ) );
+		edges[0].type = COLORED;
+
+		memcpy( edges[1].start, verts[1], sizeof( GzCoord ) );
+		memcpy( edges[1].end, verts[2], sizeof( GzCoord ) );
+		edges[1].type = UNCOLORED;
+
+		memcpy( edges[2].start, verts[2], sizeof( GzCoord ) );
+		memcpy( edges[2].end, verts[0], sizeof( GzCoord ) );
+		edges[2].type = UNCOLORED;
+	}
+	else // all 3 Y coords are distinct
+	{
+		// formulate line equation for v0 - v2
+		float slope = ( verts[2][1] - verts[0][1] ) / ( verts[2][0] - verts[0][0] );
+		// use slope to find point along v0 - v2 line with same y coord as v1's y coord
+		// y - y1 = m( x - x1 ) => x = ( ( y - y1 )/m ) + x1. We'll use vert0 for x1 and y1.
+		float midpointX = ( ( verts[1][1] - verts[0][1] ) / slope ) + verts[0][0];
+
+		// midpointX is less than v1's x, so all edges touching v1 are uncolored
+		if( midpointX < verts[1][0] )
+		{
+			memcpy( edges[0].start, verts[0], sizeof( GzCoord ) );
+			memcpy( edges[0].end, verts[2], sizeof( GzCoord ) );
+			edges[0].type = COLORED;
+
+			memcpy( edges[1].start, verts[2], sizeof( GzCoord ) );
+			memcpy( edges[1].end, verts[1], sizeof( GzCoord ) );
+			edges[1].type = UNCOLORED;
+
+			memcpy( edges[2].start, verts[1], sizeof( GzCoord ) );
+			memcpy( edges[2].end, verts[0], sizeof( GzCoord ) );
+			edges[2].type = UNCOLORED;
+		}
+		// midpoint X is greater than v1's x, so all edges touching v1 are colored
+		else if( midpointX > verts[1][0] )
+		{
+			memcpy( edges[0].start, verts[0], sizeof( GzCoord ) );
+			memcpy( edges[0].end, verts[1], sizeof( GzCoord ) );
+			edges[0].type = COLORED;
+
+			memcpy( edges[1].start, verts[1], sizeof( GzCoord ) );
+			memcpy( edges[1].end, verts[2], sizeof( GzCoord ) );
+			edges[1].type = COLORED;
+
+			memcpy( edges[2].start, verts[2], sizeof( GzCoord ) );
+			memcpy( edges[2].end, verts[0], sizeof( GzCoord ) );
+			edges[2].type = UNCOLORED;
+		}
+		// they are exactly equal. this shouldn't happen.
+		else
+		{
+			fprintf( stderr, "Error: midpointX is exactly equal to vert1's x in orderTriVertsCCW!\n" );
+			return false;
+		}
+	}
+
+	return true;
 }
 
 int sortByYThenXCoord( const void * c1, const void * c2 )
