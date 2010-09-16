@@ -507,8 +507,8 @@ bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge )
 	 * - Define tail as (X,Y) and head as (X + dX, Y + dY).
 	 * - Edge Equation:  E(x,y) = dY (x-X) - dX (y-Y)
 	 *                          = 0 for points (x,y) on line
-	 *                          = - for points in half-plane to right/below line (assuming CCW orientation)
-	 *                          = + for points in half-plane to left/above line (assuming CCW orientation)
+	 *                          = + for points in half-plane to right/below line (assuming CCW orientation)
+	 *                          = - for points in half-plane to left/above line (assuming CCW orientation)
 	 * - Use above definition and cast into general form of 2D line equation Ax + By + C = 0
 	 *   dYx - dYX - dXy + dXY = 0    (multiply terms)
 	 *   dYx + (-dXy) + (dXY - dYX) = 0   (collect terms) 
