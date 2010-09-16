@@ -201,12 +201,20 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 				planeC = crossProduct[2];
 				planeD = -( planeA * verts[0][0] + planeB * verts[0][1] + planeC * verts[0][2] );
 
+				int startX, startY, endX, endY;
+				// make sure starting pixel value is non-negative
+				startX = max( static_cast<int>( ceil( minX ) ), 0 );
+				startY = max( static_cast<int>( ceil( minY ) ), 0 );
+				// make sure ending pixel value is within display size
+				endX = min( static_cast<int>( floor( maxX ) ), render->display->xres );
+				endY = min( static_cast<int>( floor( maxY ) ), render->display->yres );
+
 				// now walk through all pixels within bounding box and rasterize
 				// Y coords are rows 
-				for( int pixelY = static_cast<int>( ceil( minY ) ); pixelY < maxY; pixelY++ )
+				for( int pixelY = startY; pixelY <= endY; pixelY++ )
 				{
 					// Y coords are columns
-					for( int pixelX = static_cast<int>( ceil( minX ) ); pixelX < maxX; pixelX++ )
+					for( int pixelX = startX; pixelX <= endX; pixelX++ )
 					{
 						bool onShadedEdge = false;
 
@@ -219,7 +227,7 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 							else
 								continue; // pixel is on a triangle edge that should not be shaded
 						}
-						else if( edge0Result > 0 ) // positive value means it's not in the triangle
+						else if( edge0Result < 0 ) // negative value means it's not in the triangle
 							continue;
 						// end edge0 test
 
@@ -235,7 +243,7 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 								else
 									continue; // pixel is on a triangle edge that should not be shaded
 							}
-							else if( edge1Result > 0 ) // positive value means it's not in the triangle
+							else if( edge1Result < 0 ) // negative value means it's not in the triangle
 								continue;
 							// end edge1 test
 						}
@@ -252,25 +260,24 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 								else
 									continue; // pixel is on a triangle edge that should not be shaded
 							}
-							else if( edge2Result > 0 ) // positive value means it's not in the triangle
+							else if( edge2Result < 0 ) // negative value means it's not in the triangle
 								continue;
 							// end edge2 test
 						}
 
 						// if we're here, the pixel should be shaded. 
 						// First interpolate Z and check value against z-buffer
-						float interpZ = ( planeD - planeA * pixelX - planeB * pixelY ) / planeC;
+						float interpZ = -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
 						
 						// don't render pixels behind the camera
-						if( interpZ < 0 )
-							continue;
+//						if( interpZ > 0 )
+//							continue;
 
 						GzIntensity r, g, b, a;
 						GzDepth z;
 						// returns a non-zero value for failure
 						if( GzGetDisplay( render->display, pixelX, pixelY, &r, &g, &b, &a, &z ) )
 						{
-							AfxMessageBox( "Error: could not get values from display in GzPutTriangle()!\n" );
 							return GZ_FAILURE;
 						}
 
