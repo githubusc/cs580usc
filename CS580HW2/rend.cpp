@@ -267,6 +267,7 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 
 						// if we're here, the pixel should be shaded. 
 						// First interpolate Z and check value against z-buffer
+						// Ax + By + Cz + D = 0 => z = -( Ax + By + D ) / C
 						float interpZ = -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
 						
 						// don't render pixels behind the camera
