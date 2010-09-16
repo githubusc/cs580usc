@@ -269,10 +269,10 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 						// First interpolate Z and check value against z-buffer
 						// Ax + By + Cz + D = 0 => z = -( Ax + By + D ) / C
 						float interpZ = -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
-						
-						// don't render pixels behind the camera
-//						if( interpZ > 0 )
-//							continue;
+
+						// don't render pixels of triangles that reside behind camera
+						if( interpZ < 0 )
+							continue;
 
 						GzIntensity r, g, b, a;
 						GzDepth z;
