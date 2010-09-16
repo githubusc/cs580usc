@@ -25,8 +25,13 @@ typedef struct
 } Edge;
 
 /*** HELPER FUNCTION DECLARATIONS ***/
+int sortByXCoord( const void * c1, const void * c2 ); // helper function for getting bounding box around tri (used with qsort)
 int sortByYThenXCoord( const void * c1, const void * c2 ); // helper function for sorting tri verts (used with qsort)
 bool orderTriVertsCCW( Edge edges[3], GzCoord * verts ); 
+bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, GzCoord * verts );
+bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge );
+bool crossProd( GzCoord * result, const Edge edge1, const Edge edge2 );
+short ctoi( float color );
 
 int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay *display)
 {
@@ -160,18 +165,136 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 			{
 			// rasterize using scanlines
 			case SCANLINE_METHOD:
-				fprintf( stderr, "Error: don't know how to rasterize with scanlines yet.\n" );
+				AfxMessageBox( "Error: don't know how to rasterize with scanlines yet.\n" );
 				return GZ_FAILURE;
 				break;
 			// rasterize using LEE
 			case LEE_METHOD:
+				// get bounding box around triangle
+				float minX, maxX, minY, maxY;
+				if( !getTriBoundingBox( &minX, &maxX, &minY, &maxY, verts ) )
+					return GZ_FAILURE;
+
 				// use convention of orienting all edges to point in counter-clockwise direction
 				Edge edges[3];
-				orderTriVertsCCW( edges, verts );
+				if( !orderTriVertsCCW( edges, verts ) )
+					return GZ_FAILURE;	
+
+				// calculate 2D line equations coefficients for all edges
+				float edge0A, edge0B, edge0C, edge1A, edge1B, edge1C, edge2A, edge2B, edge2C;
+				getLineEqnCoeff( &edge0A, &edge0B, &edge0C, edges[0] );
+				getLineEqnCoeff( &edge1A, &edge1B, &edge1C, edges[1] );
+				getLineEqnCoeff( &edge2A, &edge2B, &edge2C, edges[2] );
+
+				// need to create triangle plane eqn for all pixels that will be rendered in order to interpolate Z
+				// A general plane equation has four terms: Ax + By + Cz + D = 0
+				// Cross-product of two tri edges produces (A,B,C) vector
+				// (X,Y,Z)0 X (X,Y,Z)1 = (A,B,C) = norm to plane of edges (and tri)
+				// Solve for D at any vertex, using (A,B,C) from above
+				GzCoord crossProduct;
+				if( !( crossProd( &crossProduct, edges[0], edges[1] ) ) )
+					return GZ_FAILURE;
+
+				float planeA, planeB, planeC, planeD;
+				planeA = crossProduct[0];
+				planeB = crossProduct[1];
+				planeC = crossProduct[2];
+				planeD = -( planeA * verts[0][0] + planeB * verts[0][1] + planeC * verts[0][2] );
+
+				// now walk through all pixels within bounding box and rasterize
+				// Y coords are rows 
+				for( int pixelY = static_cast<int>( ceil( minY ) ); pixelY < maxY; pixelY++ )
+				{
+					// Y coords are columns
+					for( int pixelX = static_cast<int>( ceil( minX ) ); pixelX < maxX; pixelX++ )
+					{
+						bool onShadedEdge = false;
+
+						// test this pixel against edge0
+						float edge0Result = edge0A * pixelX + edge0B * pixelY + edge0C;
+						if( edge0Result == 0 )
+						{
+							if( edges[0].type == COLORED )
+								onShadedEdge = true;
+							else
+								continue; // pixel is on a triangle edge that should not be shaded
+						}
+						else if( edge0Result > 0 ) // positive value means it's not in the triangle
+							continue;
+						// end edge0 test
+
+						// if we know we're going to shade the pixel, don't test against any more edges
+						if( !onShadedEdge ) 
+						{
+							// test this pixel against edge1
+							float edge1Result = edge1A * pixelX + edge1B * pixelY + edge1C;
+							if( edge1Result == 0 )
+							{
+								if( edges[1].type == COLORED )
+									onShadedEdge = true;
+								else
+									continue; // pixel is on a triangle edge that should not be shaded
+							}
+							else if( edge1Result > 0 ) // positive value means it's not in the triangle
+								continue;
+							// end edge1 test
+						}
+
+						// if we know we're going to shade the pixel, don't test against any more edges
+						if( !onShadedEdge )
+						{
+							// test this pixel against edge2
+							float edge2Result = edge2A * pixelX + edge2B * pixelY + edge2C;
+							if( edge2Result == 0 )
+							{
+								if( edges[2].type == COLORED )
+									onShadedEdge = true;
+								else
+									continue; // pixel is on a triangle edge that should not be shaded
+							}
+							else if( edge2Result > 0 ) // positive value means it's not in the triangle
+								continue;
+							// end edge2 test
+						}
+
+						// if we're here, the pixel should be shaded. 
+						// First interpolate Z and check value against z-buffer
+						float interpZ = ( planeD - planeA * pixelX - planeB * pixelY ) / planeC;
+						
+						// don't render pixels behind the camera
+						if( interpZ < 0 )
+							continue;
+
+						GzIntensity r, g, b, a;
+						GzDepth z;
+						// returns a non-zero value for failure
+						if( GzGetDisplay( render->display, pixelX, pixelY, &r, &g, &b, &a, &z ) )
+						{
+							AfxMessageBox( "Error: could not get values from display in GzPutTriangle()!\n" );
+							return GZ_FAILURE;
+						}
+
+						// if the interpolated z value is smaller than the current z value, write pixel to framebuffer
+						if( interpZ < z )
+						{
+							if( GzPutDisplay( render->display, pixelX, pixelY, 
+								              ctoi( render->flatcolor[RED] ),
+											  ctoi( render->flatcolor[GREEN] ),
+											  ctoi( render->flatcolor[BLUE] ),
+											  a, // just duplicate existing alpha value for now
+											  ( GzDepth )interpZ ) )
+							{
+								AfxMessageBox( "Error: could not put new values into display in GzPutTriangle()!\n" );
+								return GZ_FAILURE;
+							}
+						}
+					} // end column for loop (X)
+				} // end row for loop (Y)
+
 				break;
 			// unrecognized rasterization method
 			default:
-				fprintf( stderr, "Error: unknown rasterization method!!!\n" );
+				AfxMessageBox( "Error: unknown rasterization method!!!\n" );
 				return GZ_FAILURE;
 			}
 		}
@@ -187,11 +310,11 @@ short	ctoi(float color)		/* convert float color to GzIntensity short */
   return(short)((int)(color * ((1 << 12) - 1)));
 }
 
-bool orderTriVertsCCW( Edge * edges, GzCoord * verts )
+bool orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 {
-	if( !edges || !verts )
+	if( !verts )
 	{
-		fprintf( stderr, "Error: edges or verts are NULL in orderTriVertsCCW()!\n" );
+		AfxMessageBox( "Error: verts are NULL in orderTriVertsCCW()!\n" );
 		return false;
 	}
 
@@ -294,7 +417,7 @@ bool orderTriVertsCCW( Edge * edges, GzCoord * verts )
 		// they are exactly equal. this shouldn't happen.
 		else
 		{
-			fprintf( stderr, "Error: midpointX is exactly equal to vert1's x in orderTriVertsCCW!\n" );
+			AfxMessageBox( "Error: midpointX is exactly equal to vert1's x in orderTriVertsCCW!\n" );
 			return false;
 		}
 	}
@@ -308,7 +431,7 @@ int sortByYThenXCoord( const void * c1, const void * c2 )
 	GzCoord * coord2 = ( GzCoord * )c2;
 
 	// find the difference in Y coordinate values
-	float yDiff = ( *coord2 )[1] - ( *coord1 )[1];
+	float yDiff = ( *coord1 )[1] - ( *coord2 )[1];
 
 	// need to return an int, so just categorize by sign
 	if( yDiff < 0 )
@@ -318,7 +441,7 @@ int sortByYThenXCoord( const void * c1, const void * c2 )
 	else
 	{
 		// Y coordinates are exactly equal. Now sort by x coord.
-		float xDiff = ( *coord2 )[0] - ( *coord1 )[0];
+		float xDiff = ( *coord1 )[0] - ( *coord2 )[0];
 		if( xDiff < 0 )
 			return -1;
 		else if( xDiff > 0 )
@@ -326,4 +449,103 @@ int sortByYThenXCoord( const void * c1, const void * c2 )
 		else
 			return 0; // this means we're dealing with an axis-aligned right triangle
 	}
+}
+
+int sortByXCoord( const void * c1, const void * c2 )
+{
+	GzCoord * coord1 = ( GzCoord * )c1;
+	GzCoord * coord2 = ( GzCoord * )c2;
+
+	float xDiff = ( *coord1 )[0] - ( *coord2 )[0];
+	if( xDiff < 0 )
+		return -1;
+	else if( xDiff > 0 )
+		return 1;
+	else
+		return 0;
+}
+
+bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, GzCoord * verts )
+{
+	if( !minX || !maxX || !minY || !maxY || !verts )
+	{
+		AfxMessageBox( "Error: received bad pointer in getTriBoundingBox()!\n" );
+		return false;
+	}
+
+	qsort( verts, 3, sizeof( GzCoord ), sortByXCoord );
+	*minX = verts[0][0];
+	*maxX = verts[2][0];
+
+	qsort( verts, 3, sizeof( GzCoord ), sortByYThenXCoord );
+	*minY = verts[0][1];
+	*maxY = verts[2][1];
+
+	return true;
+}
+
+bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge )
+{
+	if( !A || !B || !C )
+	{
+		AfxMessageBox( "Error: received bad pointer in getLineEqnCoeff()!\n" );
+		return false;
+	}
+
+	// recall: start point of vector is the tail, end point of vector is the head
+
+	/*
+	 * Algorithm:
+	 * - Define tail as (X,Y) and head as (X + dX, Y + dY).
+	 * - Edge Equation:  E(x,y) = dY (x-X) - dX (y-Y)
+	 *                          = 0 for points (x,y) on line
+	 *                          = - for points in half-plane to right/below line (assuming CCW orientation)
+	 *                          = + for points in half-plane to left/above line (assuming CCW orientation)
+	 * - Use above definition and cast into general form of 2D line equation Ax + By + C = 0
+	 *   dYx - dYX - dXy + dXY = 0    (multiply terms)
+	 *   dYx + (-dXy) + (dXY - dYX) = 0   (collect terms) 
+	 *   A = dY
+	 *   B = -dX
+	 *   C = dXY – dYX    (Compute A,B,C from edge verts)
+	 */
+
+	float varX = edge.start[0];
+	float varY = edge.start[1];
+
+	float dX = edge.end[0] - varX;
+	float dY = edge.end[1] - varY;
+
+	*A = dY;
+	*B = -dX;
+	*C = ( dX * varY ) - ( dY * varX );
+
+	return true;
+}
+
+bool crossProd( GzCoord * result, const Edge edge1, const Edge edge2 )
+{
+	if( !result )
+	{
+		AfxMessageBox( "Error: cannot compute cross product - bad pointer!\n" );
+		return false;
+	}
+
+	GzCoord vec1, vec2;
+
+	// define edge1 vector
+	vec1[0] = edge1.end[0] - edge1.start[0];
+	vec1[1] = edge1.end[1] - edge1.start[1];
+	vec1[2] = edge1.end[2] - edge1.start[2];
+
+	// define edge2 vector
+	vec2[0] = edge2.end[0] - edge2.start[0];
+	vec2[1] = edge2.end[1] - edge2.start[1];
+	vec2[2] = edge2.end[2] - edge2.start[2];
+
+	// compute cross product
+	( *result )[0] = vec1[1] * vec2[2] - vec1[2] * vec2[1];
+	( *result )[1] = -( vec1[0] * vec2[2] - vec1[2] * vec2[0] );
+	( *result )[2] = vec1[0] * vec2[1] - vec1[1] * vec2[0];
+
+	return true;
 }
