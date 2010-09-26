@@ -196,10 +196,10 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 					return GZ_FAILURE;
 
 				float planeA, planeB, planeC, planeD;
-				planeA = crossProduct[0];
-				planeB = crossProduct[1];
-				planeC = crossProduct[2];
-				planeD = -( planeA * verts[0][0] + planeB * verts[0][1] + planeC * verts[0][2] );
+				planeA = crossProduct[X];
+				planeB = crossProduct[Y];
+				planeC = crossProduct[Z];
+				planeD = -( planeA * verts[0][X] + planeB * verts[0][Y] + planeC * verts[0][Z] );
 
 				int startX, startY, endX, endY;
 				// make sure starting pixel value is non-negative
@@ -354,7 +354,7 @@ bool orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 	 */
 
 	// check to see if any two y-coords are equal; since they're ordered by Y first, equal Y coords will be adjacent
-	if( verts[0][1] == verts[1][1] ) // 2 Y coords are equal
+	if( verts[0][Y] == verts[1][Y] ) // 2 Y coords are equal
 	{
 		// since verts are sorted by Y first, we know that 3rd vert has a greater Y than the other 2
 		memcpy( edges[0].start, verts[1], sizeof( GzCoord ) );
@@ -369,7 +369,7 @@ bool orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 		memcpy( edges[2].end, verts[1], sizeof( GzCoord ) );
 		edges[2].type = UNCOLORED;
 	}
-	else if( verts[1][1] == verts[2][1] ) // 2 Y coords are equal
+	else if( verts[1][Y] == verts[2][Y] ) // 2 Y coords are equal
 	{
 		// since verts are sorted by Y first, we know that the 1st vert has a smaller Y than the other 2
 		memcpy( edges[0].start, verts[0], sizeof( GzCoord ) );
@@ -387,13 +387,13 @@ bool orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 	else // all 3 Y coords are distinct
 	{
 		// formulate line equation for v0 - v2
-		float slope = ( verts[2][1] - verts[0][1] ) / ( verts[2][0] - verts[0][0] );
+		float slope = ( verts[2][Y] - verts[0][Y] ) / ( verts[2][X] - verts[0][X] );
 		// use slope to find point along v0 - v2 line with same y coord as v1's y coord
 		// y - y1 = m( x - x1 ) => x = ( ( y - y1 )/m ) + x1. We'll use vert0 for x1 and y1.
-		float midpointX = ( ( verts[1][1] - verts[0][1] ) / slope ) + verts[0][0];
+		float midpointX = ( ( verts[1][Y] - verts[0][Y] ) / slope ) + verts[0][X];
 
 		// midpointX is less than v1's x, so all edges touching v1 are uncolored
-		if( midpointX < verts[1][0] )
+		if( midpointX < verts[1][X] )
 		{
 			memcpy( edges[0].start, verts[0], sizeof( GzCoord ) );
 			memcpy( edges[0].end, verts[2], sizeof( GzCoord ) );
@@ -408,7 +408,7 @@ bool orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 			edges[2].type = UNCOLORED;
 		}
 		// midpoint X is greater than v1's x, so all edges touching v1 are colored
-		else if( midpointX > verts[1][0] )
+		else if( midpointX > verts[1][X] )
 		{
 			memcpy( edges[0].start, verts[0], sizeof( GzCoord ) );
 			memcpy( edges[0].end, verts[1], sizeof( GzCoord ) );
@@ -439,7 +439,7 @@ int sortByYThenXCoord( const void * c1, const void * c2 )
 	GzCoord * coord2 = ( GzCoord * )c2;
 
 	// find the difference in Y coordinate values
-	float yDiff = ( *coord1 )[1] - ( *coord2 )[1];
+	float yDiff = ( *coord1 )[Y] - ( *coord2 )[Y];
 
 	// need to return an int, so just categorize by sign
 	if( yDiff < 0 )
@@ -449,7 +449,7 @@ int sortByYThenXCoord( const void * c1, const void * c2 )
 	else
 	{
 		// Y coordinates are exactly equal. Now sort by x coord.
-		float xDiff = ( *coord1 )[0] - ( *coord2 )[0];
+		float xDiff = ( *coord1 )[X] - ( *coord2 )[X];
 		if( xDiff < 0 )
 			return -1;
 		else if( xDiff > 0 )
@@ -464,7 +464,7 @@ int sortByXCoord( const void * c1, const void * c2 )
 	GzCoord * coord1 = ( GzCoord * )c1;
 	GzCoord * coord2 = ( GzCoord * )c2;
 
-	float xDiff = ( *coord1 )[0] - ( *coord2 )[0];
+	float xDiff = ( *coord1 )[X] - ( *coord2 )[X];
 	if( xDiff < 0 )
 		return -1;
 	else if( xDiff > 0 )
@@ -482,12 +482,12 @@ bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, 
 	}
 
 	qsort( verts, 3, sizeof( GzCoord ), sortByXCoord );
-	*minX = verts[0][0];
-	*maxX = verts[2][0];
+	*minX = verts[0][X];
+	*maxX = verts[2][X];
 
 	qsort( verts, 3, sizeof( GzCoord ), sortByYThenXCoord );
-	*minY = verts[0][1];
-	*maxY = verts[2][1];
+	*minY = verts[0][Y];
+	*maxY = verts[2][Y];
 
 	return true;
 }
@@ -551,9 +551,9 @@ bool crossProd( GzCoord * result, const Edge edge1, const Edge edge2 )
 	vec2[2] = edge2.end[2] - edge2.start[2];
 
 	// compute cross product
-	( *result )[0] = vec1[1] * vec2[2] - vec1[2] * vec2[1];
-	( *result )[1] = -( vec1[0] * vec2[2] - vec1[2] * vec2[0] );
-	( *result )[2] = vec1[0] * vec2[1] - vec1[1] * vec2[0];
+	( *result )[X] = vec1[Y] * vec2[Z] - vec1[Z] * vec2[Y];
+	( *result )[Y] = -( vec1[X] * vec2[Z] - vec1[Z] * vec2[X] );
+	( *result )[Z] = vec1[X] * vec2[Y] - vec1[Y] * vec2[X];
 
 	return true;
 }
