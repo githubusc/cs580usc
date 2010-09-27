@@ -40,6 +40,38 @@ int GzRotXMat(float degree, GzMatrix mat)
 {
 // Create rotate matrix : rotate along x axis
 // Pass back the matrix using mat value
+/*
+ * X-Rotation matrix format:
+ * 
+ *	1		0			0			0	
+ *	0		cos(theta)	-sin(theta)	0
+ *	0		sin(theta)	cos(theta)	0
+ *	0		0			0			1
+ */
+
+	// row 0
+	mat[0][0] = 1;
+	mat[0][1] = 0;
+	mat[0][2] = 0;
+	mat[0][3] = 0;
+
+	// row 1
+	mat[1][0] = 0;
+	mat[1][1] = cos( degree );
+	mat[1][2] = -sin( degree );
+	mat[1][3] = 0;
+
+	// row 2
+	mat[2][0] = 0;
+	mat[2][1] = sin( degree );
+	mat[2][2] = cos( degree );
+	mat[2][3] = 0;
+
+	// row 3
+	mat[3][0] = 0;
+	mat[3][1] = 0;
+	mat[3][2] = 0;
+	mat[3][3] = 1;
 
 	return GZ_SUCCESS;
 }
@@ -49,6 +81,38 @@ int GzRotYMat(float degree, GzMatrix mat)
 {
 // Create rotate matrix : rotate along y axis
 // Pass back the matrix using mat value
+/*
+ * Y-Rotation matrix format:
+ * 
+ *	cos(theta)	0			sin(theta)	0	
+ *	0			1			0			0
+ *	-sin(theta)	0			cos(theta)	0
+ *	0			0			0			1
+ */
+
+	// row 0
+	mat[0][0] = cos( degree );
+	mat[0][1] = 0;
+	mat[0][2] = sin( degree );
+	mat[0][3] = 0;
+
+	// row 1
+	mat[1][0] = 0;
+	mat[1][1] = 1;
+	mat[1][2] = 0;
+	mat[1][3] = 0;
+
+	// row 2
+	mat[2][0] = -sin( degree );
+	mat[2][1] = 0;
+	mat[2][2] = cos( degree );
+	mat[2][3] = 0;
+
+	// row 3
+	mat[3][0] = 0;
+	mat[3][1] = 0;
+	mat[3][2] = 0;
+	mat[3][3] = 1;
 
 	return GZ_SUCCESS;
 }
@@ -58,6 +122,38 @@ int GzRotZMat(float degree, GzMatrix mat)
 {
 // Create rotate matrix : rotate along z axis
 // Pass back the matrix using mat value
+/*
+ * Z-Rotation matrix format:
+ * 
+ *	cos(theta)	-sin(theta)	0		0			
+ *	sin(theta)	cos(theta)	0		0
+ *	0			0			1		0
+ *	0			0			0		1	
+ */
+
+	// row 0
+	mat[0][0] = cos( degree );
+	mat[0][1] = -sin( degree );
+	mat[0][2] = 0;
+	mat[0][3] = 0;
+
+	// row 1
+	mat[1][0] = sin( degree );
+	mat[1][1] = cos( degree );
+	mat[1][2] = 0;
+	mat[1][3] = 0;
+
+	// row 2
+	mat[2][0] = 0;
+	mat[2][1] = 0;
+	mat[2][2] = 1;
+	mat[2][3] = 0;
+
+	// row 3
+	mat[3][0] = 0;
+	mat[3][1] = 0;
+	mat[3][2] = 0;
+	mat[3][3] = 1;
 
 	return GZ_SUCCESS;
 }
