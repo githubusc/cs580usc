@@ -333,6 +333,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath=".\disp.cpp"
+				>
+			</File>
+			<File
 				RelativePath="MainFrm.cpp"
 				>
 				<FileConfiguration
@@ -477,6 +481,10 @@
 			</File>
 			<File
 				RelativePath="CS580HWView.h"
+				>
+			</File>
+			<File
+				RelativePath=".\disp.h"
 				>
 			</File>
 			<File
