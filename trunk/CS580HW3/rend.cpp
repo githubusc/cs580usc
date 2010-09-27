@@ -163,6 +163,37 @@ int GzTrxMat(GzCoord translate, GzMatrix mat)
 {
 // Create translation matrix
 // Pass back the matrix using mat value
+/*
+ * Translation matrix format:
+ *	1	0	0	Tx
+ *	0	1	0	Ty
+ *	0	0	1	Tz
+ *	0	0	0	1
+ */
+
+	// row 0
+	mat[0][0] = 1;
+	mat[0][1] = 0;
+	mat[0][2] = 0;
+	mat[0][3] = translate[X];
+
+	// row 1
+	mat[1][0] = 0;
+	mat[1][1] = 1;
+	mat[1][2] = 0;
+	mat[1][3] = translate[Y];
+
+	// row 2
+	mat[2][0] = 0;
+	mat[2][1] = 0;
+	mat[2][2] = 1;
+	mat[2][3] = translate[Z];
+
+	// row 3
+	mat[3][0] = 0;
+	mat[3][1] = 0;
+	mat[3][2] = 0;
+	mat[3][3] = 1;
 
 	return GZ_SUCCESS;
 }
@@ -172,6 +203,37 @@ int GzScaleMat(GzCoord scale, GzMatrix mat)
 {
 // Create scaling matrix
 // Pass back the matrix using mat value
+/*
+ * Scaling matrix format:
+ *	Sx	0	0	0
+ *	0	Sy	0	0
+ *	0	0	Sz	0
+ *	0	0	0	1
+ */
+
+	// row 0
+	mat[0][0] = scale[X];
+	mat[0][1] = 0;
+	mat[0][2] = 0;
+	mat[0][3] = 0;
+
+	// row 1
+	mat[1][0] = 0;
+	mat[1][1] = scale[Y];
+	mat[1][2] = 0;
+	mat[1][3] = 0;
+
+	// row 2
+	mat[2][0] = 0;
+	mat[2][1] = 0;
+	mat[2][2] = scale[Z];
+	mat[2][3] = 0;
+
+	// row 3
+	mat[3][0] = 0;
+	mat[3][1] = 0;
+	mat[3][2] = 0;
+	mat[3][3] = 1;
 
 	return GZ_SUCCESS;
 }
