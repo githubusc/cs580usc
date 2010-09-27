@@ -250,13 +250,18 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 - setup Xsp and anything only done once 
 - span interpolator needs pointer to display 
 - check for legal class GZ_Z_BUFFER_RENDER 
-- init default camera 
+- init default camera (I believe this means use default camera values to calculate Xsp)
 */ 
 
 	// check for bad pointers
 	if( !render || !display )
 		return GZ_FAILURE;
 
+	// make sure render class is legal
+	if( renderClass != GZ_Z_BUFFER_RENDER )
+		return GZ_FAILURE;
+
+	/* MALLOC A RENDERER STRUCT */
 	GzRender * tmpRenderer = new GzRender;
 	// make sure allocation worked
 	if( !tmpRenderer )
@@ -265,6 +270,45 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 	tmpRenderer->renderClass = renderClass;
 	tmpRenderer->display = display;
 	tmpRenderer->open = 0; // zero value indicates that renderer is closed
+
+	
+	/* DONE MALLOCING RENDERER STRUCT */
+
+	/* SETUP Xsp 
+	 * Format:
+	 *	xs/2	0		0		xs/2
+	 *	0		-ys/2	0		ys/2
+	 *	0		0		Zmax/d	0
+	 *	0		0		0		1
+	 *
+	 * Note that Zmax is the highest possible Z-value (e.g. depth value).
+	 * d comes from the camera's field of view [1/d = tan( FOV /2 ), so d = 1 / ( tan( FOV / 2 ) )]. 
+	 * As such, Xsp[2][2] cannot be initialized until after the camera is defined, so we'll just use the default camera values to calculate it here.
+	 */
+	// row 0
+	tmpRenderer->Xsp[0][0] = display->xres / ( float )2; // upcast the denominator to maintain accuracy
+	tmpRenderer->Xsp[0][1] = 0;
+	tmpRenderer->Xsp[0][2] = 0;
+	tmpRenderer->Xsp[0][3] = display->xres / ( float )2; // upcast the denominator to maintain accuracy
+
+	// row 1
+	tmpRenderer->Xsp[1][0] = 0;
+	tmpRenderer->Xsp[1][1] = -display->yres / ( float )2; // upcast the denominator to maintain accuracy
+	tmpRenderer->Xsp[1][2] = 0;
+	tmpRenderer->Xsp[1][3] = display->yres / ( float )2; // upcast the denominator to maintain accuracy
+
+	// row 2
+	tmpRenderer->Xsp[2][0] = 0;
+	tmpRenderer->Xsp[2][1] = 0;
+	tmpRenderer->Xsp[2][2] = INT_MAX / ( 1 / ( ( float )tan( DEFAULT_FOV / 2 ) ) ); // we cannot assign this value until the camera is initalized, so for now use default camera values.
+	tmpRenderer->Xsp[2][3] = 0;
+
+	// row 3
+	tmpRenderer->Xsp[3][0] = 0;
+	tmpRenderer->Xsp[3][1] = 0;
+	tmpRenderer->Xsp[3][2] = 0;
+	tmpRenderer->Xsp[3][3] = 1;
+	/* DONE SETTING UP Xsp */
 
 	// the rest of the struct members will be initialized in GzBeginRender.
 
