@@ -6,6 +6,8 @@
 #include	"Gz.h"
 #include	"rend.h"
 
+#define PI 3.14159265
+
 // to help with matrix transform stack
 #define EMPTY_STACK -1
 
@@ -264,7 +266,7 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 /*  
 - malloc a renderer struct 
 - keep closed until all inits are done 
-- setup Xsp and anything only done once 
+- setup Xsp and anything only done once <-- this actually relies on the camera, so wait until GzBeginRender
 - span interpolator needs pointer to display 
 - check for legal class GZ_Z_BUFFER_RENDER 
 - init default camera 
@@ -302,14 +304,6 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 	// default world up is (0,1,0)
 	tmpRenderer->camera.worldup[X] = tmpRenderer->camera.worldup[Z] = 0;
 	tmpRenderer->camera.worldup[Y] = 1;
-
-	// now we can build the camera transforms (Xpi and Xiw)
-	if( !constructCameraXforms( tmpRenderer ) )
-		return GZ_FAILURE;
-
-	// now construct the perspective -> screen space transformation matrix
-	if( !constructXsp( tmpRenderer ) )
-		return GZ_FAILURE;
 
 	// the rest of the struct members will be initialized in GzBeginRender.
 
@@ -482,7 +476,8 @@ int GzPutTriangle(GzRender	*render, int numParts, GzToken *nameList,
 - invoke triangle rasterizer  
 TRANSLATION:
 Similar to GzPutAttribute but check for GZ_POSITION and GZ_NULL_TOKEN in nameList
-Takes in a list of triangles, uses the scan-line or LEE method of rasterizing.
+Takes in a list of triangles and transforms each vertex from model space to screen space.
+Then uses the scan-line or LEE method of rasterizing.
 Then calls GzPutDisplay() to draw those pixels to the display.
 */ 
 	// check for bad pointers
@@ -497,15 +492,27 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 		}
 		else if( nameList[i] == GZ_POSITION )
 		{
-			GzCoord * position = static_cast<GzCoord *>( valueList[i] );
+			GzCoord * modelSpaceVerts = static_cast<GzCoord *>( valueList[i] );
 			
+			bool discardTriangle = false;
+
 			// make space for the transformed vertices
 			GzCoord * verts = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
 			for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
 			{
 				// first we need to transform the position into screen space
-				posVectorToScreenSpace( render->Ximage[render->matlevel], position[vertIdx], verts[vertIdx] );
+				posVectorToScreenSpace( render->Ximage[render->matlevel], modelSpaceVerts[vertIdx], verts[vertIdx] );
+
+				// discard entire triangle if this vert is behind the view plane
+				if( verts[vertIdx][Z] < 0 )
+				{
+					discardTriangle = true;
+					break;
+				}
 			}
+			
+			if( discardTriangle )
+				continue;
 
 			// rasterize this triangle
 			switch( rasterizeMethod )
@@ -1041,6 +1048,11 @@ bool constructXsp( GzRender * render )
 	 * Note that Zmax is the highest possible Z-value (e.g. depth value).
 	 * d comes from the camera's field of view [1/d = tan( FOV /2 ), so d = 1 / ( tan( FOV / 2 ) )]. 
 	 */
+
+	// since FOV is in degrees, we must first convert to radians.
+	float radianFOV = render->camera.FOV * ( PI / 180 );
+	float d = 1 / tan( radianFOV / 2 );
+
 	// row 0
 	render->Xsp[0][0] = render->display->xres / ( float )2; // upcast the denominator to maintain accuracy
 	render->Xsp[0][1] = 0;
@@ -1056,7 +1068,7 @@ bool constructXsp( GzRender * render )
 	// row 2
 	render->Xsp[2][0] = 0;
 	render->Xsp[2][1] = 0;
-	render->Xsp[2][2] = INT_MAX / ( 1 / ( ( float )tan( render->camera.FOV / 2 ) ) );
+	render->Xsp[2][2] = INT_MAX / d;
 	render->Xsp[2][3] = 0;
 
 	// row 3
@@ -1078,7 +1090,9 @@ bool constructCameraXforms( GzRender * render )
 	// NOTE: the camera MUST be initialized BEFORE this function is called!!!
 
 	// recall that d comes from the camera's field of view [1/d = tan( FOV /2 ), so d = 1 / ( tan( FOV / 2 ) )]. 
-	float d = 1 / ( tan( render->camera.FOV / 2 ) );
+	// since FOV is in degrees, we must first convert to radians.
+	float radianFOV = render->camera.FOV * ( PI / 180 );
+	float d = 1 / tan( radianFOV / 2 );
 
 	// Construct Xpi
 	/*
@@ -1180,7 +1194,7 @@ bool constructCameraXforms( GzRender * render )
 	// row 3
 	render->camera.Xiw[3][0] = 0;
 	render->camera.Xiw[3][1] = 0;
-	render->camera.Xiw[3][2] = 1;
+	render->camera.Xiw[3][2] = 0;
 	render->camera.Xiw[3][3] = 1;
 
 	return true;
