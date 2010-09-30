@@ -6,6 +6,9 @@
 #include	"Gz.h"
 #include	"rend.h"
 
+// to help with matrix transform stack
+#define EMPTY_STACK -1
+
 #define SCANLINE_METHOD 0
 #define LEE_METHOD 1
 
@@ -27,12 +30,26 @@ typedef struct
 } Edge;
 
 /*** HELPER FUNCTION DECLARATIONS ***/
+// from HW2
 int sortByXCoord( const void * c1, const void * c2 ); // helper function for getting bounding box around tri (used with qsort)
 int sortByYThenXCoord( const void * c1, const void * c2 ); // helper function for sorting tri verts (used with qsort)
 bool orderTriVertsCCW( Edge edges[3], GzCoord * verts ); 
 bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, GzCoord * verts );
 bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge );
-bool crossProd( GzCoord * result, const Edge edge1, const Edge edge2 );
+bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 );
+// from HW3
+bool constructCameraXforms( GzRender * render );
+bool constructXsp( GzRender * render );
+bool clearStack( GzRender * render );
+bool matrixMultiply( const GzMatrix mat1, const GzMatrix mat2, GzMatrix matProduct );
+bool posVectorToScreenSpace( const GzMatrix mat, const GzCoord vector, GzCoord result );
+float vectorDot( const GzCoord vec1, const GzCoord vec2 );
+bool vectorCross( const GzCoord vec1, const GzCoord vec2, GzCoord crossProduct );
+bool vectorSub( const GzCoord vec1, const GzCoord vec2, GzCoord difference ); 
+bool vectorScale( const GzCoord vector, float scaleFactor, GzCoord result );
+bool negateVector( const GzCoord origVec, GzCoord negatedVec );
+bool normalize( GzCoord vector );
+// from Professor
 short ctoi( float color );
 /*** END HELPER FUNCTION DECLARATIONS ***/
 
@@ -250,7 +267,7 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 - setup Xsp and anything only done once 
 - span interpolator needs pointer to display 
 - check for legal class GZ_Z_BUFFER_RENDER 
-- init default camera (I believe this means use default camera values to calculate Xsp)
+- init default camera 
 */ 
 
 	// check for bad pointers
@@ -274,41 +291,25 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 	
 	/* DONE MALLOCING RENDERER STRUCT */
 
-	/* SETUP Xsp 
-	 * Format:
-	 *	xs/2	0		0		xs/2
-	 *	0		-ys/2	0		ys/2
-	 *	0		0		Zmax/d	0
-	 *	0		0		0		1
-	 *
-	 * Note that Zmax is the highest possible Z-value (e.g. depth value).
-	 * d comes from the camera's field of view [1/d = tan( FOV /2 ), so d = 1 / ( tan( FOV / 2 ) )]. 
-	 * As such, Xsp[2][2] cannot be initialized until after the camera is defined, so we'll just use the default camera values to calculate it here.
-	 */
-	// row 0
-	tmpRenderer->Xsp[0][0] = display->xres / ( float )2; // upcast the denominator to maintain accuracy
-	tmpRenderer->Xsp[0][1] = 0;
-	tmpRenderer->Xsp[0][2] = 0;
-	tmpRenderer->Xsp[0][3] = display->xres / ( float )2; // upcast the denominator to maintain accuracy
+	// init default camera - must be done BEFORE calling constructXsp
+	tmpRenderer->camera.FOV = DEFAULT_FOV;
+	// default lookat is (0,0,0)
+	tmpRenderer->camera.lookat[X] = tmpRenderer->camera.lookat[Y] = tmpRenderer->camera.lookat[Z] = 0; 
+	// camera position is the image plane origin
+	tmpRenderer->camera.position[X] = DEFAULT_IM_X;
+	tmpRenderer->camera.position[Y] = DEFAULT_IM_Y;
+	tmpRenderer->camera.position[Z] = DEFAULT_IM_Z;
+	// default world up is (0,1,0)
+	tmpRenderer->camera.worldup[X] = tmpRenderer->camera.worldup[Z] = 0;
+	tmpRenderer->camera.worldup[Y] = 1;
 
-	// row 1
-	tmpRenderer->Xsp[1][0] = 0;
-	tmpRenderer->Xsp[1][1] = -display->yres / ( float )2; // upcast the denominator to maintain accuracy
-	tmpRenderer->Xsp[1][2] = 0;
-	tmpRenderer->Xsp[1][3] = display->yres / ( float )2; // upcast the denominator to maintain accuracy
+	// now we can build the camera transforms (Xpi and Xiw)
+	if( !constructCameraXforms( tmpRenderer ) )
+		return GZ_FAILURE;
 
-	// row 2
-	tmpRenderer->Xsp[2][0] = 0;
-	tmpRenderer->Xsp[2][1] = 0;
-	tmpRenderer->Xsp[2][2] = INT_MAX / ( 1 / ( ( float )tan( DEFAULT_FOV / 2 ) ) ); // we cannot assign this value until the camera is initalized, so for now use default camera values.
-	tmpRenderer->Xsp[2][3] = 0;
-
-	// row 3
-	tmpRenderer->Xsp[3][0] = 0;
-	tmpRenderer->Xsp[3][1] = 0;
-	tmpRenderer->Xsp[3][2] = 0;
-	tmpRenderer->Xsp[3][3] = 1;
-	/* DONE SETTING UP Xsp */
+	// now construct the perspective -> screen space transformation matrix
+	if( !constructXsp( tmpRenderer ) )
+		return GZ_FAILURE;
 
 	// the rest of the struct members will be initialized in GzBeginRender.
 
@@ -343,20 +344,41 @@ int GzBeginRender(GzRender *render)
 - set up for start of each frame - clear frame buffer 
 - compute Xiw and projection xform Xpi from camera definition 
 - init Ximage - put Xsp at base of stack, push on Xpi and Xiw 
-- now stack contains Xsw and app can push model Xforms if it want to. 
+- now stack contains Xsw and app can push model Xforms if it wants to. 
 */ 
 	// check for bad pointer
 	if( !render )
-		return GZ_FAILURE;
-
-	render->open = 1; // non-zero value indicates that renderer is now open
+		return GZ_FAILURE;	
 
 	// use red for default flat color
 	render->flatcolor[RED] = 1; 
 	render->flatcolor[GREEN] = 0;
 	render->flatcolor[BLUE] = 0;
 
-	return GZ_SUCCESS;
+	// Calculate Xsp, Xpi, and Xiw
+	if( !constructCameraXforms( render ) )
+		return GZ_FAILURE;
+
+	if( !constructXsp( render ) )
+		return GZ_FAILURE;
+
+	// empty the transform stack
+	clearStack( render );
+
+	int status = GZ_SUCCESS;
+
+	// put Xsp at the base of the stack
+	status |= GzPushMatrix( render, render->Xsp );
+
+	// push Xpi onto the stack
+	status |= GzPushMatrix( render, render->camera.Xpi );
+
+	// push Xiw onto the stack
+	status |= GzPushMatrix( render, render->camera.Xiw );
+
+	render->open = 1; // non-zero value indicates that renderer is now open
+
+	return status;
 }
 
 int GzPutCamera(GzRender *render, GzCamera *camera)
@@ -364,7 +386,12 @@ int GzPutCamera(GzRender *render, GzCamera *camera)
 /*
 - overwrite renderer camera structure with new camera definition
 */
-	return GZ_SUCCESS;	
+	if( !render || !camera )
+		return GZ_FAILURE;
+
+	memcpy( &( render->camera ), camera, sizeof( GzCamera ) );
+
+	return true;	
 }
 
 int GzPushMatrix(GzRender *render, GzMatrix	matrix)
@@ -373,6 +400,28 @@ int GzPushMatrix(GzRender *render, GzMatrix	matrix)
 - push a matrix onto the Ximage stack
 - check for stack overflow
 */
+	if( !render || render->matlevel == MATLEVELS )
+		return GZ_FAILURE;
+
+	// if the stack is empty, just put this matrix directly onto the stack (no multiplication necessary)
+	if( render->matlevel == EMPTY_STACK )
+	{
+		// copy the matrix into the stack
+		memcpy( render->Ximage[render->matlevel + 1], matrix, sizeof( GzMatrix ) );
+	}
+	else
+	{
+		// the matrix we push onto the stack should be the top of the stack multiplied by the new transform (on the right)
+		GzMatrix xformProduct;
+		matrixMultiply( render->Ximage[render->matlevel], matrix, xformProduct );
+
+		// copy the matrix into the stack
+		memcpy( render->Ximage[render->matlevel + 1], xformProduct, sizeof( GzMatrix ) );
+	}
+
+	// another matrix has been pushed onto the stack
+	render->matlevel++;
+
 	return GZ_SUCCESS;
 }
 
@@ -382,6 +431,12 @@ int GzPopMatrix(GzRender *render)
 - pop a matrix off the Ximage stack
 - check for stack underflow
 */
+	if( !render || render->matlevel == EMPTY_STACK )
+		return GZ_FAILURE;
+
+	// a matrix hss been popped off of the stack
+	render->matlevel--;
+
 	return GZ_SUCCESS;
 }
 
@@ -442,7 +497,15 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 		}
 		else if( nameList[i] == GZ_POSITION )
 		{
-			GzCoord * verts = static_cast<GzCoord *>( valueList[i] );
+			GzCoord * position = static_cast<GzCoord *>( valueList[i] );
+			
+			// make space for the transformed vertices
+			GzCoord * verts = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
+			for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
+			{
+				// first we need to transform the position into screen space
+				posVectorToScreenSpace( render->Ximage[render->matlevel], position[vertIdx], verts[vertIdx] );
+			}
 
 			// rasterize this triangle
 			switch( rasterizeMethod )
@@ -476,7 +539,7 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 				// (X,Y,Z)0 X (X,Y,Z)1 = (A,B,C) = norm to plane of edges (and tri)
 				// Solve for D at any vertex, using (A,B,C) from above
 				GzCoord crossProduct;
-				if( !( crossProd( &crossProduct, edges[0], edges[1] ) ) )
+				if( !( crossProd( crossProduct, edges[0], edges[1] ) ) )
 					return GZ_FAILURE;
 
 				float planeA, planeB, planeC, planeD;
@@ -582,6 +645,10 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 						}
 					} // end column for loop (X)
 				} // end row for loop (Y)
+
+				// now clean up after ourselves
+				free( verts );
+				verts = 0;
 
 				break;
 			// unrecognized rasterization method
@@ -814,7 +881,7 @@ bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge )
 	return true;
 }
 
-bool crossProd( GzCoord * result, const Edge edge1, const Edge edge2 )
+bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 )
 {
 	if( !result )
 	{
@@ -835,9 +902,286 @@ bool crossProd( GzCoord * result, const Edge edge1, const Edge edge2 )
 	vec2[2] = edge2.end[2] - edge2.start[2];
 
 	// compute cross product
-	( *result )[X] = vec1[Y] * vec2[Z] - vec1[Z] * vec2[Y];
-	( *result )[Y] = -( vec1[X] * vec2[Z] - vec1[Z] * vec2[X] );
-	( *result )[Z] = vec1[X] * vec2[Y] - vec1[Y] * vec2[X];
+	result[X] = vec1[Y] * vec2[Z] - vec1[Z] * vec2[Y];
+	result[Y] = -( vec1[X] * vec2[Z] - vec1[Z] * vec2[X] );
+	result[Z] = vec1[X] * vec2[Y] - vec1[Y] * vec2[X];
+
+	return true;
+}
+
+bool clearStack( GzRender * render )
+{
+	if( !render )
+		return false;
+
+	render->matlevel = EMPTY_STACK;
+	return true;
+}
+
+bool matrixMultiply( const GzMatrix mat1, const GzMatrix mat2, GzMatrix matProduct )
+{
+	/* 
+	 * Recall that when we multiply two 4x4 matrices A & B:
+	 *		( AB )i,j = summation for k = 1 to k = 4 of ( A )i,k * ( B )k,j
+	 */
+
+	// initialize all elements of the matrix to 0
+	for( int row = 0; row < 4; row++ )
+	{
+		for( int col = 0; col < 4; col++ )
+		{
+			matProduct[row][col] = 0;
+		}
+	}
+
+	for( int row = 0; row < 4; row++ )
+	{
+		for( int col = 0; col < 4; col++ )
+		{
+			for( int sumIdx = 0; sumIdx < 4; sumIdx++ )
+			{
+				matProduct[row][col] += mat1[row][sumIdx] * mat2[sumIdx][col];
+			}
+		}
+	}
+
+	return true;
+}
+
+bool posVectorToScreenSpace( const GzMatrix mat, const GzCoord vector, GzCoord result )
+{
+	float tempResult[4];
+	float tempVector[4];
+
+	tempVector[X] = vector[X];
+	tempVector[Y] = vector[Y];
+	tempVector[Z] = vector[Z];
+	tempVector[3] = 1;
+
+	for( int i = 0; i < 4; i++ )
+		tempResult[i] = 0;
+	
+	for( int idx = 0; idx < 4; idx++ )
+	{
+		for( int sumIdx = 0; sumIdx < 4; sumIdx++ )
+		{
+			tempResult[idx] += mat[idx][sumIdx] * tempVector[sumIdx];
+		}
+	}
+
+	result[X] = tempResult[X] / tempResult[3];
+	result[Y] = tempResult[Y] / tempResult[3];
+	result[Z] = tempResult[Z] / tempResult[3];
+
+	return true;
+}
+
+float vectorDot( const GzCoord vec1, const GzCoord vec2 )
+{
+	return vec1[X] * vec2[X] + vec1[Y] * vec2[Y] + vec1[Z] * vec2[Z];
+}
+
+bool vectorCross( const GzCoord vec1, const GzCoord vec2, GzCoord crossProduct )
+{
+	crossProduct[X] = vec1[Y] * vec2[Z] - vec1[Z] * vec2[Y];
+	crossProduct[Y] = vec1[Z] * vec2[X] - vec1[X] * vec2[Z];
+	crossProduct[Z] = vec1[X] * vec2[Y] - vec1[Y] * vec2[X];
+	return true;
+}
+
+bool negateVector( const GzCoord origVec, GzCoord negatedVec )
+{
+	negatedVec[X] = -origVec[X];
+	negatedVec[Y] = -origVec[Y];
+	negatedVec[Z] = -origVec[Z];
+
+	return true;
+}
+
+bool vectorSub( const GzCoord vec1, const GzCoord vec2, GzCoord difference )
+{
+	difference[X] = vec1[X] - vec2[X];
+	difference[Y] = vec1[Y] - vec2[Y];
+	difference[Z] = vec1[Z] - vec2[Z];
+	return true;
+}
+
+bool vectorScale( const GzCoord vector, float scaleFactor, GzCoord result )
+{
+	result[X] = vector[X] * scaleFactor;
+	result[Y] = vector[Y] * scaleFactor;
+	result[Z] = vector[Z] * scaleFactor;
+	return true;
+}
+
+bool normalize( GzCoord vector )
+{
+	float magnitude = sqrt( vector[X] * vector[X] + vector[Y] * vector[Y] + vector[Z] * vector[Z] );
+	vector[X] /= magnitude;
+	vector[Y] /= magnitude;
+	vector[Z] /= magnitude;
+	return true;
+}
+
+bool constructXsp( GzRender * render )
+{
+	// check for bad pointers
+	if( !render || !render->display )
+		return false;
+
+	// NOTE: camera should be initialized FIRST!!!
+
+	/* SETUP Xsp 
+	 * Format:
+	 *	xs/2	0		0		xs/2
+	 *	0		-ys/2	0		ys/2
+	 *	0		0		Zmax/d	0
+	 *	0		0		0		1
+	 *
+	 * Note that Zmax is the highest possible Z-value (e.g. depth value).
+	 * d comes from the camera's field of view [1/d = tan( FOV /2 ), so d = 1 / ( tan( FOV / 2 ) )]. 
+	 */
+	// row 0
+	render->Xsp[0][0] = render->display->xres / ( float )2; // upcast the denominator to maintain accuracy
+	render->Xsp[0][1] = 0;
+	render->Xsp[0][2] = 0;
+	render->Xsp[0][3] = render->display->xres / ( float )2; // upcast the denominator to maintain accuracy
+
+	// row 1
+	render->Xsp[1][0] = 0;
+	render->Xsp[1][1] = -render->display->yres / ( float )2; // upcast the denominator to maintain accuracy
+	render->Xsp[1][2] = 0;
+	render->Xsp[1][3] = render->display->yres / ( float )2; // upcast the denominator to maintain accuracy
+
+	// row 2
+	render->Xsp[2][0] = 0;
+	render->Xsp[2][1] = 0;
+	render->Xsp[2][2] = INT_MAX / ( 1 / ( ( float )tan( render->camera.FOV / 2 ) ) );
+	render->Xsp[2][3] = 0;
+
+	// row 3
+	render->Xsp[3][0] = 0;
+	render->Xsp[3][1] = 0;
+	render->Xsp[3][2] = 0;
+	render->Xsp[3][3] = 1;
+	/* DONE SETTING UP Xsp */
+
+	return true;
+}
+
+bool constructCameraXforms( GzRender * render )
+{
+	// check for bad pointers
+	if( !render || !render->display )
+		return false;
+	
+	// NOTE: the camera MUST be initialized BEFORE this function is called!!!
+
+	// recall that d comes from the camera's field of view [1/d = tan( FOV /2 ), so d = 1 / ( tan( FOV / 2 ) )]. 
+	float d = 1 / ( tan( render->camera.FOV / 2 ) );
+
+	// Construct Xpi
+	/*
+	 * Format of Xpi:
+	 *	1	0	0	0
+	 *	0	1	0	0
+	 *	0	0	1	0
+	 *	0	0	1/d	1
+	 */
+	// row 0
+	render->camera.Xpi[0][0] = 1;
+	render->camera.Xpi[0][1] = 0;
+	render->camera.Xpi[0][2] = 0;
+	render->camera.Xpi[0][3] = 0;
+
+	// row 1
+	render->camera.Xpi[1][0] = 0;
+	render->camera.Xpi[1][1] = 1;
+	render->camera.Xpi[1][2] = 0;
+	render->camera.Xpi[1][3] = 0;
+
+	// row 2
+	render->camera.Xpi[2][0] = 0;
+	render->camera.Xpi[2][1] = 0;
+	render->camera.Xpi[2][2] = 1;
+	render->camera.Xpi[2][3] = 0;
+
+	// row 3
+	render->camera.Xpi[3][0] = 0;
+	render->camera.Xpi[3][1] = 0;
+	render->camera.Xpi[3][2] = 1 / d;
+	render->camera.Xpi[3][3] = 1;
+
+	// Construct Xiw
+	/*
+	 * We'll build Xiw by building Xwi and taking its inverse.
+	 * We already know the camera position (c) and look at point (l) in world space.
+	 * The camera's z axis in world space is therefore 
+	 *		Z = ( c->l ) / || ( c->l ) ||. 
+	 *		Observe that c->l is ( l - c ).
+	 * We know the camera's up vector (up) in world space.
+	 * up' (the up vector in image space) is therefore
+	 *		up' = up - dot( up, Z ) * Z
+	 * Thus the camera's Y vector in image space is
+	 *		Y = up' / || up' ||
+	 * Finally, we use a left-handed coordinate system for the camera. Therefore
+	 *		X = ( Y x Z )
+	 *
+	 * So we now have our Xwi transform:
+	 *		Xx	Yx	Zx	Cx
+	 *		Xy	Yy	Zy	Cy
+	 *		Xz	Yz	Zz	Cz
+	 *		0	0	0	1
+	 * Observe that this matrix has the form 
+	 *		Xwi = T * R
+	 * Thus we can derive Xiw:
+	 *		Xiw = inv( Xwi ) = inv( T * R ) = inv( R ) * inv( T )
+	 * That is, Xiw looks like this:
+	 *		Xx	Xy	Xz	dot( -X, c )
+	 *		Yx	Yy	Yz	dot( -Y, c )
+	 *		Zx	Zy	Zz	dot( -Z, c )
+	 *		0	0	0	1
+	 * Note that for any vectors A and B, dot( -A, B ) = -dot( A, B ).
+	 */
+
+	GzCoord camX, camY, camZ, upDotCamZTimesCamZ;
+
+	// first build camera Z vector
+	vectorSub( render->camera.lookat, render->camera.position, camZ );
+	normalize( camZ );
+
+	// now build camera Y vector
+	float upDotCamZ = vectorDot( render->camera.worldup, camZ );
+	vectorScale( camZ, upDotCamZ, upDotCamZTimesCamZ );
+	vectorSub( render->camera.worldup, upDotCamZTimesCamZ, camY );
+	normalize( camY );
+
+	// now build camera X vector
+	vectorCross( camY, camZ, camX ); // observe that crossing 2 unit vectors yields a unit vector, so we don't need to normalize
+
+	// row 0
+	render->camera.Xiw[0][0] = camX[X];
+	render->camera.Xiw[0][1] = camX[Y];
+	render->camera.Xiw[0][2] = camX[Z];
+	render->camera.Xiw[0][3] = -vectorDot( camX, render->camera.position );
+
+	// row 1
+	render->camera.Xiw[1][0] = camY[X];
+	render->camera.Xiw[1][1] = camY[Y];
+	render->camera.Xiw[1][2] = camY[Z];
+	render->camera.Xiw[1][3] = -vectorDot( camY, render->camera.position );
+
+	// row 2
+	render->camera.Xiw[2][0] = camZ[X];
+	render->camera.Xiw[2][1] = camZ[Y];
+	render->camera.Xiw[2][2] = camZ[Z];
+	render->camera.Xiw[2][3] = -vectorDot( camZ, render->camera.position );
+
+	// row 3
+	render->camera.Xiw[3][0] = 0;
+	render->camera.Xiw[3][1] = 0;
+	render->camera.Xiw[3][2] = 1;
+	render->camera.Xiw[3][3] = 1;
 
 	return true;
 }
