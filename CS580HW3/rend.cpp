@@ -52,6 +52,7 @@ bool vectorSub( const GzCoord vec1, const GzCoord vec2, GzCoord difference );
 bool vectorScale( const GzCoord vector, float scaleFactor, GzCoord result );
 bool negateVector( const GzCoord origVec, GzCoord negatedVec );
 bool normalize( GzCoord vector );
+bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts );
 // from Professor
 short ctoi( float color );
 /*** END HELPER FUNCTION DECLARATIONS ***/
@@ -512,7 +513,8 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 				}
 			}
 			
-			if( discardTriangle )
+			// skip this triangle if it's marked to be discarded or if it's completely outside of the image plane
+			if( discardTriangle || triangleOutsideImagePlane( render, verts ) )
 				continue;
 
 			// rasterize this triangle
@@ -1212,4 +1214,27 @@ bool constructCameraXforms( GzRender * render )
 	render->camera.Xiw[3][3] = 1;
 
 	return true;
+}
+
+bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts )
+{
+	// NOTE: verts should be give in screen space coordinates
+	if( !render || !render->display || !verts )
+		return true; // no image plane is available!
+
+	// all vertices are above image plane (e.g all Y coords are < 0)
+	if( verts[0][Y] < 0 && verts[1][Y] < 0 && verts[2][Y] < 0 )
+		return true;
+	// all vertices are below image plane (e.g all Y coords are > yres)
+	else if( verts[0][Y] > render->display->yres && verts[1][Y] > render->display->yres && verts[2][Y] > render->display->yres )
+		return true;
+	// all vertices are to left of image plane (e.g all X coords are < 0)
+	else if( verts[0][X] < 0 && verts[1][X] < 0 && verts[2][X] < 0 )
+		return true;
+	// all vertices are to right of image plane (e.g all X coords are > xres)
+	else if( verts[0][X] > render->display->xres && verts[1][X] > render->display->xres && verts[2][X] > render->display->xres )
+		return true;
+	// we can't determine the triangle is completely outside the image plane
+	else
+		return false;
 }
