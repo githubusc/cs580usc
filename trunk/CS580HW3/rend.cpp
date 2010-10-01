@@ -512,7 +512,9 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 			}
 			
 			if( discardTriangle )
+			{
 				continue;
+			}
 
 			// rasterize this triangle
 			switch( rasterizeMethod )
@@ -653,18 +655,18 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 					} // end column for loop (X)
 				} // end row for loop (Y)
 
-				// now clean up after ourselves
-				free( verts );
-				verts = 0;
-
 				break;
 			// unrecognized rasterization method
 			default:
 				AfxMessageBox( "Error: unknown rasterization method!!!\n" );
 				return GZ_FAILURE;
-			}
-		}
-	}
+			} // end switch( rasterizeMethod )
+
+			// now clean up after ourselves
+			free( verts );
+			verts = 0;
+		} // end else if( nameList[i] == GZ_POSITION )
+	} // end loop over numParts
 
 	return GZ_SUCCESS;
 }
