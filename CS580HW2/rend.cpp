@@ -30,7 +30,8 @@ int sortByYThenXCoord( const void * c1, const void * c2 ); // helper function fo
 bool orderTriVertsCCW( Edge edges[3], GzCoord * verts ); 
 bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, GzCoord * verts );
 bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge );
-bool crossProd( GzCoord * result, const Edge edge1, const Edge edge2 );
+bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 );
+bool rasterizeLEE( GzRender * render, GzCoord * verts );
 short ctoi( float color );
 
 int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay *display)
@@ -170,135 +171,8 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 				break;
 			// rasterize using LEE
 			case LEE_METHOD:
-				// get bounding box around triangle
-				float minX, maxX, minY, maxY;
-				if( !getTriBoundingBox( &minX, &maxX, &minY, &maxY, verts ) )
+				if( !rasterizeLEE( render, verts ) )
 					return GZ_FAILURE;
-
-				// use convention of orienting all edges to point in counter-clockwise direction
-				Edge edges[3];
-				if( !orderTriVertsCCW( edges, verts ) )
-					return GZ_FAILURE;	
-
-				// calculate 2D line equations coefficients for all edges
-				float edge0A, edge0B, edge0C, edge1A, edge1B, edge1C, edge2A, edge2B, edge2C;
-				getLineEqnCoeff( &edge0A, &edge0B, &edge0C, edges[0] );
-				getLineEqnCoeff( &edge1A, &edge1B, &edge1C, edges[1] );
-				getLineEqnCoeff( &edge2A, &edge2B, &edge2C, edges[2] );
-
-				// need to create triangle plane eqn for all pixels that will be rendered in order to interpolate Z
-				// A general plane equation has four terms: Ax + By + Cz + D = 0
-				// Cross-product of two tri edges produces (A,B,C) vector
-				// (X,Y,Z)0 X (X,Y,Z)1 = (A,B,C) = norm to plane of edges (and tri)
-				// Solve for D at any vertex, using (A,B,C) from above
-				GzCoord crossProduct;
-				if( !( crossProd( &crossProduct, edges[0], edges[1] ) ) )
-					return GZ_FAILURE;
-
-				float planeA, planeB, planeC, planeD;
-				planeA = crossProduct[X];
-				planeB = crossProduct[Y];
-				planeC = crossProduct[Z];
-				planeD = -( planeA * verts[0][X] + planeB * verts[0][Y] + planeC * verts[0][Z] );
-
-				int startX, startY, endX, endY;
-				// make sure starting pixel value is non-negative
-				startX = max( static_cast<int>( ceil( minX ) ), 0 );
-				startY = max( static_cast<int>( ceil( minY ) ), 0 );
-				// make sure ending pixel value is within display size
-				endX = min( static_cast<int>( floor( maxX ) ), render->display->xres );
-				endY = min( static_cast<int>( floor( maxY ) ), render->display->yres );
-
-				// now walk through all pixels within bounding box and rasterize
-				// Y coords are rows 
-				for( int pixelY = startY; pixelY <= endY; pixelY++ )
-				{
-					// Y coords are columns
-					for( int pixelX = startX; pixelX <= endX; pixelX++ )
-					{
-						bool onShadedEdge = false;
-
-						// test this pixel against edge0
-						float edge0Result = edge0A * pixelX + edge0B * pixelY + edge0C;
-						if( edge0Result == 0 )
-						{
-							if( edges[0].type == COLORED )
-								onShadedEdge = true;
-							else
-								continue; // pixel is on a triangle edge that should not be shaded
-						}
-						else if( edge0Result < 0 ) // negative value means it's not in the triangle
-							continue;
-						// end edge0 test
-
-						// if we know we're going to shade the pixel, don't test against any more edges
-						if( !onShadedEdge ) 
-						{
-							// test this pixel against edge1
-							float edge1Result = edge1A * pixelX + edge1B * pixelY + edge1C;
-							if( edge1Result == 0 )
-							{
-								if( edges[1].type == COLORED )
-									onShadedEdge = true;
-								else
-									continue; // pixel is on a triangle edge that should not be shaded
-							}
-							else if( edge1Result < 0 ) // negative value means it's not in the triangle
-								continue;
-							// end edge1 test
-						}
-
-						// if we know we're going to shade the pixel, don't test against any more edges
-						if( !onShadedEdge )
-						{
-							// test this pixel against edge2
-							float edge2Result = edge2A * pixelX + edge2B * pixelY + edge2C;
-							if( edge2Result == 0 )
-							{
-								if( edges[2].type == COLORED )
-									onShadedEdge = true;
-								else
-									continue; // pixel is on a triangle edge that should not be shaded
-							}
-							else if( edge2Result < 0 ) // negative value means it's not in the triangle
-								continue;
-							// end edge2 test
-						}
-
-						// if we're here, the pixel should be shaded. 
-						// First interpolate Z and check value against z-buffer
-						// Ax + By + Cz + D = 0 => z = -( Ax + By + D ) / C
-						float interpZ = -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
-
-						// don't render pixels of triangles that reside behind camera
-						if( interpZ < 0 )
-							continue;
-
-						GzIntensity r, g, b, a;
-						GzDepth z;
-						// returns a non-zero value for failure
-						if( GzGetDisplay( render->display, pixelX, pixelY, &r, &g, &b, &a, &z ) )
-						{
-							return GZ_FAILURE;
-						}
-
-						// if the interpolated z value is smaller than the current z value, write pixel to framebuffer
-						if( interpZ < z )
-						{
-							if( GzPutDisplay( render->display, pixelX, pixelY, 
-								              ctoi( render->flatcolor[RED] ),
-											  ctoi( render->flatcolor[GREEN] ),
-											  ctoi( render->flatcolor[BLUE] ),
-											  a, // just duplicate existing alpha value for now
-											  ( GzDepth )interpZ ) )
-							{
-								AfxMessageBox( "Error: could not put new values into display in GzPutTriangle()!\n" );
-								return GZ_FAILURE;
-							}
-						}
-					} // end column for loop (X)
-				} // end row for loop (Y)
-
 				break;
 			// unrecognized rasterization method
 			default:
@@ -530,7 +404,7 @@ bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge )
 	return true;
 }
 
-bool crossProd( GzCoord * result, const Edge edge1, const Edge edge2 )
+bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 )
 {
 	if( !result )
 	{
@@ -551,9 +425,143 @@ bool crossProd( GzCoord * result, const Edge edge1, const Edge edge2 )
 	vec2[2] = edge2.end[2] - edge2.start[2];
 
 	// compute cross product
-	( *result )[X] = vec1[Y] * vec2[Z] - vec1[Z] * vec2[Y];
-	( *result )[Y] = -( vec1[X] * vec2[Z] - vec1[Z] * vec2[X] );
-	( *result )[Z] = vec1[X] * vec2[Y] - vec1[Y] * vec2[X];
+	result[X] = vec1[Y] * vec2[Z] - vec1[Z] * vec2[Y];
+	result[Y] = -( vec1[X] * vec2[Z] - vec1[Z] * vec2[X] );
+	result[Z] = vec1[X] * vec2[Y] - vec1[Y] * vec2[X];
+
+	return true;
+}
+
+bool rasterizeLEE( GzRender * render, GzCoord * verts )
+{
+	// get bounding box around triangle
+	float minX, maxX, minY, maxY;
+	if( !getTriBoundingBox( &minX, &maxX, &minY, &maxY, verts ) )
+		return false;
+
+	// use convention of orienting all edges to point in counter-clockwise direction
+	Edge edges[3];
+	if( !orderTriVertsCCW( edges, verts ) )
+		return false;	
+
+	// calculate 2D line equations coefficients for all edges
+	float edge0A, edge0B, edge0C, edge1A, edge1B, edge1C, edge2A, edge2B, edge2C;
+	getLineEqnCoeff( &edge0A, &edge0B, &edge0C, edges[0] );
+	getLineEqnCoeff( &edge1A, &edge1B, &edge1C, edges[1] );
+	getLineEqnCoeff( &edge2A, &edge2B, &edge2C, edges[2] );
+
+	// need to create triangle plane eqn for all pixels that will be rendered in order to interpolate Z
+	// A general plane equation has four terms: Ax + By + Cz + D = 0
+	// Cross-product of two tri edges produces (A,B,C) vector
+	// (X,Y,Z)0 X (X,Y,Z)1 = (A,B,C) = norm to plane of edges (and tri)
+	// Solve for D at any vertex, using (A,B,C) from above
+	GzCoord crossProduct;
+	if( !( crossProd( crossProduct, edges[0], edges[1] ) ) )
+		return false;
+
+	float planeA, planeB, planeC, planeD;
+	planeA = crossProduct[X];
+	planeB = crossProduct[Y];
+	planeC = crossProduct[Z];
+	planeD = -( planeA * verts[0][X] + planeB * verts[0][Y] + planeC * verts[0][Z] );
+
+	int startX, startY, endX, endY;
+	// make sure starting pixel value is non-negative
+	startX = max( static_cast<int>( ceil( minX ) ), 0 );
+	startY = max( static_cast<int>( ceil( minY ) ), 0 );
+	// make sure ending pixel value is within display size
+	endX = min( static_cast<int>( floor( maxX ) ), render->display->xres );
+	endY = min( static_cast<int>( floor( maxY ) ), render->display->yres );
+
+	// now walk through all pixels within bounding box and rasterize
+	// Y coords are rows 
+	for( int pixelY = startY; pixelY <= endY; pixelY++ )
+	{
+		// Y coords are columns
+		for( int pixelX = startX; pixelX <= endX; pixelX++ )
+		{
+			bool onShadedEdge = false;
+
+			// test this pixel against edge0
+			float edge0Result = edge0A * pixelX + edge0B * pixelY + edge0C;
+			if( edge0Result == 0 )
+			{
+				if( edges[0].type == COLORED )
+					onShadedEdge = true;
+				else
+					continue; // pixel is on a triangle edge that should not be shaded
+			}
+			else if( edge0Result < 0 ) // negative value means it's not in the triangle
+				continue;
+			// end edge0 test
+
+			// if we know we're going to shade the pixel, don't test against any more edges
+			if( !onShadedEdge ) 
+			{
+				// test this pixel against edge1
+				float edge1Result = edge1A * pixelX + edge1B * pixelY + edge1C;
+				if( edge1Result == 0 )
+				{
+					if( edges[1].type == COLORED )
+						onShadedEdge = true;
+					else
+						continue; // pixel is on a triangle edge that should not be shaded
+				}
+				else if( edge1Result < 0 ) // negative value means it's not in the triangle
+					continue;
+				// end edge1 test
+			}
+
+			// if we know we're going to shade the pixel, don't test against any more edges
+			if( !onShadedEdge )
+			{
+				// test this pixel against edge2
+				float edge2Result = edge2A * pixelX + edge2B * pixelY + edge2C;
+				if( edge2Result == 0 )
+				{
+					if( edges[2].type == COLORED )
+						onShadedEdge = true;
+					else
+						continue; // pixel is on a triangle edge that should not be shaded
+				}
+				else if( edge2Result < 0 ) // negative value means it's not in the triangle
+					continue;
+				// end edge2 test
+			}
+
+			// if we're here, the pixel should be shaded. 
+			// First interpolate Z and check value against z-buffer
+			// Ax + By + Cz + D = 0 => z = -( Ax + By + D ) / C
+			float interpZ = -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
+
+			// don't render pixels of triangles that reside behind camera
+			if( interpZ < 0 )
+				continue;
+
+			GzIntensity r, g, b, a;
+			GzDepth z;
+			// returns a non-zero value for failure
+			if( GzGetDisplay( render->display, pixelX, pixelY, &r, &g, &b, &a, &z ) )
+			{
+				return false;
+			}
+
+			// if the interpolated z value is smaller than the current z value, write pixel to framebuffer
+			if( interpZ < z )
+			{
+				if( GzPutDisplay( render->display, pixelX, pixelY, 
+					              ctoi( render->flatcolor[RED] ),
+								  ctoi( render->flatcolor[GREEN] ),
+								  ctoi( render->flatcolor[BLUE] ),
+								  a, // just duplicate existing alpha value for now
+								  ( GzDepth )interpZ ) )
+				{
+					AfxMessageBox( "Error: could not put new values into display in GzPutTriangle()!\n" );
+					return false;
+				}
+			}
+		} // end column for loop (X)
+	} // end row for loop (Y)
 
 	return true;
 }
