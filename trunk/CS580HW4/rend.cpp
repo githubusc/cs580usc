@@ -387,7 +387,7 @@ int GzPutCamera(GzRender *render, GzCamera *camera)
 
 	memcpy( &( render->camera ), camera, sizeof( GzCamera ) );
 
-	return true;	
+	return GZ_SUCCESS;	
 }
 
 int GzPushMatrix(GzRender *render, GzMatrix	matrix)
@@ -451,14 +451,17 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 
 	for( int i = 0; i < numAttributes; i++ )
 	{
-		// check for GZ_RGB_COLOR in nameList
-		if( nameList[i] == GZ_RGB_COLOR )
+		
+		switch( nameList[i] )
 		{
+		// check for GZ_RGB_COLOR in nameList
+		case GZ_RGB_COLOR:
 			GzColor * colorPtr = ( static_cast<GzColor *>( valueList[i] ) );
 			// assign the color values in valueList to render variable
 			render->flatcolor[RED] = ( *colorPtr )[RED];
 			render->flatcolor[GREEN] = ( *colorPtr )[GREEN];
 			render->flatcolor[BLUE] = ( *colorPtr )[BLUE];
+			break;
 		}
 	}
 
@@ -488,12 +491,12 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 
 	for( int i = 0; i < numParts; i++ )
 	{
-		if( nameList[i] == GZ_NULL_TOKEN )
+		switch( nameList[i] )
 		{
+		case GZ_NULL_TOKEN:
 			// do nothing - no values
-		}
-		else if( nameList[i] == GZ_POSITION )
-		{
+			break;
+		case GZ_POSITION:
 			GzCoord * modelSpaceVerts = static_cast<GzCoord *>( valueList[i] );
 			
 			bool discardTriangle = false;
@@ -539,8 +542,9 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 			// now clean up after ourselves
 			free( verts );
 			verts = 0;
-		} // end else if( nameList[i] == GZ_POSITION )
-	} // end loop over numParts
+			break;
+		} // end switch( nameList[i] )
+	} // end loop over numparts
 
 	return GZ_SUCCESS;
 }
