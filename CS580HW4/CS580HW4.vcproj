@@ -333,6 +333,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath=".\disp.cpp"
+				>
+			</File>
+			<File
 				RelativePath="MainFrm.cpp"
 				>
 				<FileConfiguration
@@ -351,6 +355,10 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\rend.cpp"
+				>
 			</File>
 			<File
 				RelativePath="RotateDlg.cpp"
@@ -460,11 +468,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\disp.h"
+				>
+			</File>
+			<File
 				RelativePath="gz.h"
 				>
 			</File>
 			<File
 				RelativePath="MainFrm.h"
+				>
+			</File>
+			<File
+				RelativePath=".\rend.h"
 				>
 			</File>
 			<File
