@@ -387,7 +387,7 @@ int GzPutCamera(GzRender *render, GzCamera *camera)
 
 	memcpy( &( render->camera ), camera, sizeof( GzCamera ) );
 
-	return true;	
+	return GZ_SUCCESS;	
 }
 
 int GzPushMatrix(GzRender *render, GzMatrix	matrix)
