@@ -451,16 +451,29 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 
 	for( int i = 0; i < numAttributes; i++ )
 	{
-		
 		switch( nameList[i] )
 		{
-		// check for GZ_RGB_COLOR in nameList
-		case GZ_RGB_COLOR:
-			GzColor * colorPtr = ( static_cast<GzColor *>( valueList[i] ) );
+		case GZ_RGB_COLOR: // set default flat-shader color
+			GzColor * colorPtr;
+			colorPtr = ( static_cast<GzColor *>( valueList[i] ) );
 			// assign the color values in valueList to render variable
 			render->flatcolor[RED] = ( *colorPtr )[RED];
 			render->flatcolor[GREEN] = ( *colorPtr )[GREEN];
 			render->flatcolor[BLUE] = ( *colorPtr )[BLUE];
+			break;
+		case GZ_INTERPOLATE: // shader interpolation mode 
+			break;
+		case GZ_DIRECTIONAL_LIGHT: // add a directional light
+			break;
+		case GZ_AMBIENT_LIGHT: // set ambient light color
+			break;
+		case GZ_AMBIENT_COEFFICIENT: // Ka ambient reflectance coef's
+			break;
+		case GZ_DIFFUSE_COEFFICIENT: // Kd diffuse reflectance coef's
+			break;
+		case GZ_SPECULAR_COEFFICIENT: // Ks ambient reflectance coef's
+			break; 
+		case GZ_DISTRIBUTION_COEFFICIENT: // specular power
 			break;
 		}
 	}
