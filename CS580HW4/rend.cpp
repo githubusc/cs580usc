@@ -307,6 +307,32 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 	tmpRenderer->camera.worldup[X] = tmpRenderer->camera.worldup[Z] = 0;
 	tmpRenderer->camera.worldup[Y] = 1;
 
+	// initialize default ambient light to be off
+	tmpRenderer->ambientlight.color[RED] = 0.0f;
+	tmpRenderer->ambientlight.color[BLUE] = 0.0f;
+	tmpRenderer->ambientlight.color[GREEN] = 0.0f;
+
+	// right now, no other lights have been added (ambient light does not count in light count)
+	tmpRenderer->numlights = 0;
+
+	// initialize default Ka, Kd, & Ks
+	GzColor defaultKa = DEFAULT_AMBIENT, defaultKd = DEFAULT_DIFFUSE, defaultKs = DEFAULT_SPECULAR;
+	tmpRenderer->Ka[RED] = defaultKa[RED];
+	tmpRenderer->Ka[GREEN] = defaultKa[GREEN];
+	tmpRenderer->Ka[BLUE] = defaultKa[BLUE];
+	tmpRenderer->Kd[RED] = defaultKd[RED];
+	tmpRenderer->Kd[GREEN] = defaultKd[GREEN];
+	tmpRenderer->Kd[BLUE] = defaultKd[BLUE];
+	tmpRenderer->Ks[RED] = defaultKs[RED];
+	tmpRenderer->Ks[GREEN] = defaultKs[GREEN];
+	tmpRenderer->Ks[BLUE] = defaultKs[BLUE];
+
+	// initialize default specular power
+	tmpRenderer->spec = DEFAULT_SPEC;
+
+	// use flat shading as the default interpolation mode
+	tmpRenderer->interp_mode = GZ_FLAT;
+
 	// the rest of the struct members will be initialized in GzBeginRender.
 
 	*render = tmpRenderer;
@@ -464,8 +490,25 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 		case GZ_INTERPOLATE: // shader interpolation mode 
 			break;
 		case GZ_DIRECTIONAL_LIGHT: // add a directional light
+			// only add a light if we have room for another one
+			if( render->numlights < MAX_LIGHTS )
+			{
+				GzColor * directionalLight;
+				directionalLight = ( static_cast<GzColor *>( valueList[i] ) );
+				render->lights[render->numlights].color[RED] = ( *directionalLight )[RED];
+				render->lights[render->numlights].color[GREEN] = ( *directionalLight )[GREEN];
+				render->lights[render->numlights].color[BLUE] = ( *directionalLight )[BLUE];
+
+				// another light has been added
+				render->numlights++;
+			}
 			break;
 		case GZ_AMBIENT_LIGHT: // set ambient light color
+			GzColor * ambientLight;
+			ambientLight = ( static_cast<GzColor *>( valueList[i] ) );
+			render->ambientlight.color[RED] = ( *ambientLight )[RED];
+			render->ambientlight.color[GREEN] = ( *ambientLight )[GREEN];
+			render->ambientlight.color[BLUE] = ( *ambientLight )[BLUE];
 			break;
 		case GZ_AMBIENT_COEFFICIENT: // Ka ambient reflectance coef's
 			break;

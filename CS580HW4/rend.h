@@ -6,9 +6,9 @@
 #define	DEFAULT_IM_Y	(5.0)    /* default look-at point = 0,0,0 */
 #define	DEFAULT_IM_X	(-10.0)
 
-#define	DEFAULT_AMBIENT	{0.1, 0.1, 0.1}
-#define	DEFAULT_DIFFUSE	{0.7, 0.6, 0.5}
-#define	DEFAULT_SPECULAR	{0.2, 0.3, 0.4}
+#define	DEFAULT_AMBIENT	{0.1f, 0.1f, 0.1f}
+#define	DEFAULT_DIFFUSE	{0.7f, 0.6f, 0.5f}
+#define	DEFAULT_SPECULAR	{0.2f, 0.3f, 0.4f}
 #define	DEFAULT_SPEC		32
 
 #define	MATLEVELS	100		/* how many matrix pushes allowed */
