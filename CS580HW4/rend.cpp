@@ -488,6 +488,9 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 			render->flatcolor[BLUE] = ( *colorPtr )[BLUE];
 			break;
 		case GZ_INTERPOLATE: // shader interpolation mode 
+			int * interpModePtr;
+			interpModePtr = ( static_cast<int *>( valueList[i] ) );
+			render->interp_mode = *interpModePtr;
 			break;
 		case GZ_DIRECTIONAL_LIGHT: // add a directional light
 			// only add a light if we have room for another one
@@ -511,12 +514,30 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 			render->ambientlight.color[BLUE] = ( *ambientLight )[BLUE];
 			break;
 		case GZ_AMBIENT_COEFFICIENT: // Ka ambient reflectance coef's
+			GzColor * coeffKa;
+			coeffKa = ( static_cast<GzColor *>( valueList[i] ) );
+			render->Ka[RED] = ( *coeffKa )[RED];
+			render->Ka[GREEN] = ( *coeffKa )[GREEN];
+			render->Ka[BLUE] = ( *coeffKa )[BLUE];
 			break;
 		case GZ_DIFFUSE_COEFFICIENT: // Kd diffuse reflectance coef's
+			GzColor * coeffKd;
+			coeffKd = ( static_cast<GzColor *>( valueList[i] ) );
+			render->Kd[RED] = ( *coeffKd )[RED];
+			render->Kd[GREEN] = ( *coeffKd )[GREEN];
+			render->Kd[BLUE] = ( *coeffKd )[BLUE];
 			break;
 		case GZ_SPECULAR_COEFFICIENT: // Ks ambient reflectance coef's
+			GzColor * coeffKs;
+			coeffKs = ( static_cast<GzColor *>( valueList[i] ) );
+			render->Ks[RED] = ( *coeffKs )[RED];
+			render->Ks[GREEN] = ( *coeffKs )[GREEN];
+			render->Ks[BLUE] = ( *coeffKs )[BLUE];
 			break; 
 		case GZ_DISTRIBUTION_COEFFICIENT: // specular power
+			float * specPower;
+			specPower = ( static_cast<float *>( valueList[i] ) );
+			render->spec = *specPower;
 			break;
 		}
 	}
