@@ -41,13 +41,13 @@ bool orderTriVertsCCW( Edge edges[3], GzCoord * verts );
 bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, GzCoord * verts );
 bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge );
 bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 );
-bool rasterizeLEE( GzRender * render, GzCoord * verts );
+bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imageSpaceVerts, GzCoord * imageSpaceNormals );
 // from HW3
 bool constructCameraXforms( GzRender * render );
 bool constructXsp( GzRender * render );
 bool clearStack( GzRender * render );
 bool matrixMultiply( const GzMatrix mat1, const GzMatrix mat2, GzMatrix matProduct );
-bool posVectorToScreenSpace( const GzMatrix mat, const GzCoord vector, GzCoord result );
+bool homogeneousMatrixVectorMultiply( const GzMatrix mat, const GzCoord vector, GzCoord result );
 float vectorDot( const GzCoord vec1, const GzCoord vec2 );
 bool vectorCross( const GzCoord vec1, const GzCoord vec2, GzCoord crossProduct );
 bool vectorSub( const GzCoord vec1, const GzCoord vec2, GzCoord difference ); 
@@ -656,6 +656,10 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 
 	// allocate space for the three vertices of this triangle in screen space
 	GzCoord * screenSpaceVerts = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
+
+	// allocate space for the three vertices and three normals of this triangle in image space
+	GzCoord * imageSpaceVerts = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
+	GzCoord * imageSpaceNormals = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
 	
 	// prepare for pointers to 3 vertices and 3 normals
 	GzCoord * modelSpaceVerts = 0;
@@ -677,7 +681,7 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 			for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
 			{
 				// first we need to transform the position into screen space
-				posVectorToScreenSpace( render->Ximage[render->matlevel], modelSpaceVerts[vertIdx], screenSpaceVerts[vertIdx] );
+				homogeneousMatrixVectorMultiply( render->Ximage[render->matlevel], modelSpaceVerts[vertIdx], screenSpaceVerts[vertIdx] );
 
 				// discard entire triangle if this vert is behind the view plane
 				if( screenSpaceVerts[vertIdx][Z] < 0 )
@@ -700,6 +704,20 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 		} // end switch( nameList[i] )
 	} // end loop over numparts
 
+	// if we didn't read in model space vertices and normals, we had a problem.
+	if( !modelSpaceVerts || !modelSpaceNormals )
+	{
+		AfxMessageBox( "Error: no vertices and/or normals found in GzPutTriangle!!!\n" );
+		return GZ_FAILURE;
+	}
+
+	// now transform the model space vertices and normals into image space (using normals transformation stack) for rasterization use
+	for( int i = 0; i < 3; i++ )
+	{
+		homogeneousMatrixVectorMultiply( render->Xnorm[render->matlevel], modelSpaceVerts[i], imageSpaceVerts[i] );
+		homogeneousMatrixVectorMultiply( render->Xnorm[render->matlevel], modelSpaceNormals[i], imageSpaceNormals[i] );
+	}
+
 	// rasterize this triangle
 	switch( rasterizeMethod )
 	{
@@ -710,7 +728,7 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 		break;
 	// rasterize using LEE
 	case LEE_METHOD:
-		if( !rasterizeLEE( render, screenSpaceVerts ) )
+		if( !rasterizeLEE( render, screenSpaceVerts, imageSpaceVerts, imageSpaceNormals ) )
 			return GZ_FAILURE;
 		break;
 	// unrecognized rasterization method
@@ -722,6 +740,10 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 	// now clean up after ourselves - free the 
 	free( screenSpaceVerts );
 	screenSpaceVerts = 0;
+	free( imageSpaceVerts );
+	imageSpaceVerts = 0;
+	free( imageSpaceNormals );
+	imageSpaceNormals = 0;
 
 	return GZ_SUCCESS;
 }
@@ -975,16 +997,16 @@ bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 )
 	return true;
 }
 
-bool rasterizeLEE( GzRender * render, GzCoord * verts )
+bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imageSpaceVerts, GzCoord * imageSpaceNormals )
 {
 	// get bounding box around triangle
 	float minX, maxX, minY, maxY;
-	if( !getTriBoundingBox( &minX, &maxX, &minY, &maxY, verts ) )
+	if( !getTriBoundingBox( &minX, &maxX, &minY, &maxY, screenSpaceVerts ) )
 		return false;
 
 	// use convention of orienting all edges to point in counter-clockwise direction
 	Edge edges[3];
-	if( !orderTriVertsCCW( edges, verts ) )
+	if( !orderTriVertsCCW( edges, screenSpaceVerts ) )
 		return false;	
 
 	// calculate 2D line equations coefficients for all edges
@@ -1006,7 +1028,7 @@ bool rasterizeLEE( GzRender * render, GzCoord * verts )
 	planeA = crossProduct[X];
 	planeB = crossProduct[Y];
 	planeC = crossProduct[Z];
-	planeD = -( planeA * verts[0][X] + planeB * verts[0][Y] + planeC * verts[0][Z] );
+	planeD = -( planeA * screenSpaceVerts[0][X] + planeB * screenSpaceVerts[0][Y] + planeC * screenSpaceVerts[0][Z] );
 
 	int startX, startY, endX, endY;
 	// make sure starting pixel value is non-negative
@@ -1152,7 +1174,7 @@ bool matrixMultiply( const GzMatrix mat1, const GzMatrix mat2, GzMatrix matProdu
 	return true;
 }
 
-bool posVectorToScreenSpace( const GzMatrix mat, const GzCoord vector, GzCoord result )
+bool homogeneousMatrixVectorMultiply( const GzMatrix mat, const GzCoord vector, GzCoord result )
 {
 	float tempResult[4];
 	float tempVector[4];
@@ -1165,6 +1187,7 @@ bool posVectorToScreenSpace( const GzMatrix mat, const GzCoord vector, GzCoord r
 	for( int i = 0; i < 4; i++ )
 		tempResult[i] = 0;
 	
+	// perform matrix-vector multiplication
 	for( int idx = 0; idx < 4; idx++ )
 	{
 		for( int sumIdx = 0; sumIdx < 4; sumIdx++ )
@@ -1173,6 +1196,7 @@ bool posVectorToScreenSpace( const GzMatrix mat, const GzCoord vector, GzCoord r
 		}
 	}
 
+	// account for scaling by the homogeneous coordinate
 	result[X] = tempResult[X] / tempResult[3];
 	result[Y] = tempResult[Y] / tempResult[3];
 	result[Z] = tempResult[Z] / tempResult[3];
@@ -1419,3 +1443,9 @@ bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts )
 	else
 		return false;
 }
+
+/* END HW3 FUNCTIONS */
+
+/* BEGIN HW4 FUNCTIONS */
+
+/* END HW4 FUNCTIONS */
