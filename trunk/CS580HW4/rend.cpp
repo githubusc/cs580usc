@@ -479,9 +479,52 @@ int GzPushMatrix(GzRender *render, GzMatrix	matrix)
 	// this is NOT the Xsp or Xpi matrix, so include it on the normals transform stack. 
 	else
 	{
+		// Note: Transforms and rotations are NOT allowed on the normals transform stack.
+		//       It may only contain unitary rotations and uniform scaling.
+		//       Thus we must pre-process the matrix being pushed on the stack to make sure it fits these criteria.
+		GzMatrix processedMatrix;
+
+		// row 0 - last column has no translation
+		processedMatrix[0][0] = matrix[0][0];
+		processedMatrix[0][1] = matrix[0][1];
+		processedMatrix[0][2] = matrix[0][2];
+		processedMatrix[0][3] = 0;
+		// row 1 - last column has no translation
+		processedMatrix[1][0] = matrix[1][0];
+		processedMatrix[1][1] = matrix[1][1];
+		processedMatrix[1][2] = matrix[1][2];
+		processedMatrix[1][3] = 0;
+		// row 2 - last column has no translation
+		processedMatrix[2][0] = matrix[2][0];
+		processedMatrix[2][1] = matrix[2][1];
+		processedMatrix[2][2] = matrix[2][2];
+		processedMatrix[2][3] = 0;
+		// row 3 - last column has no translation
+		processedMatrix[3][0] = matrix[3][0];
+		processedMatrix[3][1] = matrix[3][1];
+		processedMatrix[3][2] = matrix[3][2];
+		processedMatrix[3][3] = 1;
+
+		// We must now ensure that the upper 3x3 matrix is a unitary rotation matrix. (i.e. the length of any row or column is 1)
+		// Since the only allowed matrices here are rotations and UNIFORM scales, 
+		// we can do this by finding the length of any one row or column (they will all be the same)
+		// and dividing each component of the upper 3x3 matrix by that length.
+		// So choose ANY column or row and we can get K = 1 / sqrt(a^2 + b^2 + c^2)
+		float normFactor = 1 / sqrt( matrix[0][0] * matrix[0][0] + matrix[1][0] * matrix[1][0] + matrix[2][0] * matrix[2][0] );
+		// loop through upper 3 rows
+		for( int row = 0; row < 3; row++ )
+		{
+			// loop through upper 3 columns
+			for( int col = 0; col < 3; col++ )
+			{
+				// normalize this component of upper 3x3 matrix
+				processedMatrix[row][col] *= normFactor;
+			}
+		}
+
 		// the matrix we push onto the geometry stack should be the top of the stack multiplied by the new transform (on the right)
 		GzMatrix xformProduct;
-		matrixMultiply( render->Xnorm[render->matlevel - 1], matrix, xformProduct );
+		matrixMultiply( render->Xnorm[render->matlevel - 1], processedMatrix, xformProduct );
 
 		// copy the matrix into the geometry stack
 		memcpy( render->Xnorm[render->matlevel], xformProduct, sizeof( GzMatrix ) );
