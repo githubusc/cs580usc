@@ -55,6 +55,10 @@ bool vectorScale( const GzCoord vector, float scaleFactor, GzCoord result );
 bool negateVector( const GzCoord origVec, GzCoord negatedVec );
 bool normalize( GzCoord vector );
 bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts );
+// from HW4
+bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, const GzCoord colorResult );
+bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum ); 
+bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod );
 // from Professor
 short ctoi( float color );
 /*** END HELPER FUNCTION DECLARATIONS ***/
@@ -1114,10 +1118,29 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 			// if the interpolated z value is smaller than the current z value, write pixel to framebuffer
 			if( interpZ < z )
 			{
+				GzCoord color;
+				// calculate appropriate color based on selected interpolation method
+				switch( render->interp_mode )
+				{
+				case GZ_COLOR: // Gourad shading
+					AfxMessageBox( "Error: don't know how to perform Gouraud shading yet!\n" );
+					break;
+				case GZ_NORMALS: // Phong shading
+					// first we must use bilinear interpolation to find the normal at this pixel
+					AfxMessageBox( "Error: don't know how to perform Phong shading yet!\n" );
+					break;
+				default:
+					// just use flat shading as the default
+					color[RED] = render->flatcolor[RED];
+					color[GREEN] = render->flatcolor[GREEN];
+					color[BLUE] = render->flatcolor[BLUE];
+					break;
+				}
+
 				if( GzPutDisplay( render->display, pixelX, pixelY, 
-					              ctoi( render->flatcolor[RED] ),
-								  ctoi( render->flatcolor[GREEN] ),
-								  ctoi( render->flatcolor[BLUE] ),
+					              ctoi( color[RED] ),
+								  ctoi( color[GREEN] ),
+								  ctoi( color[BLUE] ),
 								  a, // just duplicate existing alpha value for now
 								  ( GzDepth )interpZ ) )
 				{
@@ -1447,5 +1470,103 @@ bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts )
 /* END HW3 FUNCTIONS */
 
 /* BEGIN HW4 FUNCTIONS */
+
+bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoord imageSpaceNormal, GzCoord colorResult )
+{
+	// check for bad pointer
+	if( !render )
+		return false;
+
+	// intialize color to black just in case
+	colorResult[RED] = colorResult[GREEN] = colorResult[BLUE] = 0;
+
+	// Shading equation: 
+	//		Color = (Ks * sumOverLights[ lightIntensity ( R dot E )^s ] ) + (Kd * sumOverLights[lightIntensity (N dot L)] ) + ( Ka Ia ) 
+	// So we must sum over all the lights.
+	GzColor KsComponent, KdComponent;
+	KsComponent[RED] = KsComponent[GREEN] = KsComponent[BLUE] = KdComponent[RED] = KdComponent[GREEN] = KdComponent[BLUE] = 0;
+	for( int lightIdx = 0; lightIdx < render->numlights; lightIdx++ )
+	{
+		// Compute reflected ray. R = 2(N dot L)N - L   
+		GzCoord twoNdotLTimesN, reflectedRay;
+		float NdotL = vectorDot( imageSpaceNormal, render->lights[lightIdx].direction );
+		vectorScale( imageSpaceNormal, 2 * NdotL, twoNdotLTimesN );
+		vectorSub( twoNdotLTimesN, render->lights[lightIdx].direction, reflectedRay );
+
+		// In image space, the direction to the eye (e.g. camera) is simply (0, 0, -1)
+		GzCoord eyeDir;
+		eyeDir[X] = eyeDir[Y] = 0;
+		eyeDir[Z] = -1;
+
+		// compute N dot E
+		float NdotE = vectorDot( imageSpaceNormal, eyeDir );
+
+		// We need to consider the sign of N dot L and N dot E:
+		//		Both positive : compute lighting model
+		//		Both negative : flip normal and compute lighting model on backside of surface
+		//		Both different sign : light and eye on opposite sides of surface so that light contributes zero – skip it
+		GzCoord newImageSpaceNormal;
+		if( NdotL > 0 && NdotE > 0 )
+		{
+			// keep the same normal
+			newImageSpaceNormal[X] = imageSpaceNormal[X];
+			newImageSpaceNormal[Y] = imageSpaceNormal[Y];
+			newImageSpaceNormal[Z] = imageSpaceNormal[Z];
+		}
+		else if( NdotL < 0 && NdotE < 0 )
+		{
+			// flip normal
+			vectorScale( imageSpaceNormal, -1, newImageSpaceNormal );
+		}
+		else
+		{
+			continue;
+		}
+
+		// now add in the Kd and Ks contributions from this light
+		float RdotE = vectorDot( reflectedRay, eyeDir );
+		// don't allow RdotE to be a negative value
+		if( RdotE < 0 )
+			RdotE = 0;
+
+		GzCoord tempKsComp, tempKdComp;
+		vectorScale( render->lights[lightIdx].color, pow( RdotE, render->spec ), tempKsComp );
+		vectorScale( render->lights[lightIdx].color, NdotL, tempKdComp );	
+
+		vectorAdd( KsComponent, tempKsComp, KsComponent );
+		vectorAdd( KdComponent, tempKdComp, KdComponent );
+	}
+
+	// finally, put the shading equation together:
+	//		Color = (Ks * sumOverLights[ lightIntensity ( R dot E )^s ] ) + (Kd * sumOverLights[lightIntensity (N dot L)] ) + ( Ka Ia ) 
+	GzCoord KaComponent;
+	vectorComponentMultiply( render->Ks, KsComponent, KsComponent );
+	vectorComponentMultiply( render->Kd, KdComponent, KdComponent );
+	vectorComponentMultiply( render->Ka, render->ambientlight.color, KaComponent );
+	
+	// add all components together
+	vectorAdd( KsComponent, KdComponent, colorResult );
+	vectorAdd( KaComponent, colorResult, colorResult );
+
+	return true;
+}
+
+bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum )
+{
+	sum[X] = vec1[X] + vec2[X];
+	sum[Y] = vec1[Y] + vec2[Y];
+	sum[Z] = vec1[Z] + vec2[Z];
+	return true;
+}
+
+bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod )
+{
+	for( int idx = 0; idx < 3; idx++ )
+	{
+		prod[idx] = vec1[idx] * vec2[idx];
+	}
+
+	return true;
+}
 
 /* END HW4 FUNCTIONS */
