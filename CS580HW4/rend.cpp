@@ -330,8 +330,8 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 	// initialize default specular power
 	tmpRenderer->spec = DEFAULT_SPEC;
 
-	// use flat shading as the default interpolation mode
-	tmpRenderer->interp_mode = GZ_FLAT;
+	// use phong shading as the default interpolation mode
+	tmpRenderer->interp_mode = GZ_NORMALS;
 
 	// the rest of the struct members will be initialized in GzBeginRender.
 
