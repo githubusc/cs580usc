@@ -10,6 +10,8 @@
 
 // to help with matrix transform stack
 #define EMPTY_STACK -1
+#define XFORM_PERSP_TO_SCREEN 0
+#define XFORM_IMAGE_TO_PERSP 1
 
 #define SCANLINE_METHOD 0
 #define LEE_METHOD 1
@@ -419,30 +421,71 @@ int GzPutCamera(GzRender *render, GzCamera *camera)
 int GzPushMatrix(GzRender *render, GzMatrix	matrix)
 {
 /*
-- push a matrix onto the Ximage stack
+- push a matrix onto the Ximage geometry stack
 - check for stack overflow
 */
 	if( !render || render->matlevel == MATLEVELS )
 		return GZ_FAILURE;
 
-	// if the stack is empty, just put this matrix directly onto the stack (no multiplication necessary)
+	// if the geometry stack is empty, just put this matrix directly onto the stack (no multiplication necessary)
 	if( render->matlevel == EMPTY_STACK )
 	{
-		// copy the matrix into the stack
+		// copy the matrix into the geometry stack
 		memcpy( render->Ximage[render->matlevel + 1], matrix, sizeof( GzMatrix ) );
 	}
 	else
 	{
-		// the matrix we push onto the stack should be the top of the stack multiplied by the new transform (on the right)
+		// the matrix we push onto the geometry stack should be the top of the stack multiplied by the new transform (on the right)
 		GzMatrix xformProduct;
 		matrixMultiply( render->Ximage[render->matlevel], matrix, xformProduct );
 
-		// copy the matrix into the stack
+		// copy the matrix into the geometry stack
 		memcpy( render->Ximage[render->matlevel + 1], xformProduct, sizeof( GzMatrix ) );
 	}
 
-	// another matrix has been pushed onto the stack
+	// another matrix has been pushed onto the geometry stack
 	render->matlevel++;
+
+	// now push the appropriate matrix on the normals transform stack
+	// if this is the Xsp or Xpi matrix, DON'T include it on the normals transform stack. Push the identity matrix instead.
+	if( render->matlevel == XFORM_PERSP_TO_SCREEN || render->matlevel == XFORM_IMAGE_TO_PERSP )
+	{
+		GzMatrix identityMatrix;
+
+		// row 0
+		identityMatrix[0][0] = 1;
+		identityMatrix[0][1] = 0;
+		identityMatrix[0][2] = 0;
+		identityMatrix[0][3] = 0;
+		// row 1
+		identityMatrix[1][0] = 0;
+		identityMatrix[1][1] = 1;
+		identityMatrix[1][2] = 0;
+		identityMatrix[1][3] = 0;
+		// row 2
+		identityMatrix[2][0] = 0;
+		identityMatrix[2][1] = 0;
+		identityMatrix[2][2] = 1;
+		identityMatrix[2][3] = 0;
+		// row 3
+		identityMatrix[3][0] = 0;
+		identityMatrix[3][1] = 0;
+		identityMatrix[3][2] = 0;
+		identityMatrix[3][3] = 1;
+
+		// copy the identity matrix into the normals transform stack
+		memcpy( render->Xnorm[render->matlevel], identityMatrix, sizeof( GzMatrix ) );
+	}
+	// this is NOT the Xsp or Xpi matrix, so include it on the normals transform stack. 
+	else
+	{
+		// the matrix we push onto the geometry stack should be the top of the stack multiplied by the new transform (on the right)
+		GzMatrix xformProduct;
+		matrixMultiply( render->Xnorm[render->matlevel - 1], matrix, xformProduct );
+
+		// copy the matrix into the geometry stack
+		memcpy( render->Xnorm[render->matlevel], xformProduct, sizeof( GzMatrix ) );
+	}
 
 	return GZ_SUCCESS;
 }
@@ -551,7 +594,9 @@ int GzPutTriangle(GzRender	*render, int numParts, GzToken *nameList,
 {
 /*  
 - pass in a triangle description with tokens and values corresponding to 
-      GZ_POSITION:3 vert positions in model space 
+      GZ_POSITION: 3 vert positions in model space 
+	  GZ_NORMAL: 3 vert normals in model space
+	  GZ_TEXTURE_INDEX: u,v texture coordinates for 3 verts (not handled in this assignment)
 - Xform positions of verts  
 - Clip - just discard any triangle with verts behind view plane 
        - test for triangles with all three verts off-screen 
@@ -566,6 +611,13 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 	if( !render || !nameList || !valueList )
 		return GZ_FAILURE;
 
+	// allocate space for the three vertices of this triangle in screen space
+	GzCoord * screenSpaceVerts = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
+	
+	// prepare for pointers to 3 vertices and 3 normals
+	GzCoord * modelSpaceVerts = 0;
+	GzCoord * modelSpaceNormals = 0;
+
 	for( int i = 0; i < numParts; i++ )
 	{
 		switch( nameList[i] )
@@ -574,54 +626,59 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 			// do nothing - no values
 			break;
 		case GZ_POSITION:
-			GzCoord * modelSpaceVerts = static_cast<GzCoord *>( valueList[i] );
+			modelSpaceVerts = static_cast<GzCoord *>( valueList[i] );
 			
-			bool discardTriangle = false;
-
-			// make space for the transformed vertices
-			GzCoord * verts = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
+			bool triBehindViewPlane;
+			triBehindViewPlane = false;
+			
 			for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
 			{
 				// first we need to transform the position into screen space
-				posVectorToScreenSpace( render->Ximage[render->matlevel], modelSpaceVerts[vertIdx], verts[vertIdx] );
+				posVectorToScreenSpace( render->Ximage[render->matlevel], modelSpaceVerts[vertIdx], screenSpaceVerts[vertIdx] );
 
 				// discard entire triangle if this vert is behind the view plane
-				if( verts[vertIdx][Z] < 0 )
+				if( screenSpaceVerts[vertIdx][Z] < 0 )
 				{
-					discardTriangle = true;
+					triBehindViewPlane = true;
 					break;
 				}
 			}
 			
-			// skip this triangle if it's marked to be discarded or if it's completely outside of the image plane
-			if( discardTriangle || triangleOutsideImagePlane( render, verts ) )
-				continue;
-
-			// rasterize this triangle
-			switch( rasterizeMethod )
-			{
-			// rasterize using scanlines
-			case SCANLINE_METHOD:
-				AfxMessageBox( "Error: don't know how to rasterize with scanlines yet.\n" );
-				return GZ_FAILURE;
-				break;
-			// rasterize using LEE
-			case LEE_METHOD:
-				if( !rasterizeLEE( render, verts ) )
-					return GZ_FAILURE;
-				break;
-			// unrecognized rasterization method
-			default:
-				AfxMessageBox( "Error: unknown rasterization method!!!\n" );
-				return GZ_FAILURE;
-			} // end switch( rasterizeMethod )
-
-			// now clean up after ourselves
-			free( verts );
-			verts = 0;
-			break;
+			// we don't need to rasterize this triangle if it's behind the view plane or if it's completely outside of the image plane
+			if( triBehindViewPlane || triangleOutsideImagePlane( render, screenSpaceVerts ) )
+				return GZ_SUCCESS;
+			
+			break; // end case: GZ_POSITION
+		case GZ_NORMAL:
+			modelSpaceNormals = static_cast<GzCoord *>( valueList[i] );
+			break; // end case: GZ_NORMAL
+		case GZ_TEXTURE_INDEX:
+			break; // end case: GZ_TEXTURE_INDEX
 		} // end switch( nameList[i] )
 	} // end loop over numparts
+
+	// rasterize this triangle
+	switch( rasterizeMethod )
+	{
+	// rasterize using scanlines
+	case SCANLINE_METHOD:
+		AfxMessageBox( "Error: don't know how to rasterize with scanlines yet.\n" );
+		return GZ_FAILURE;
+		break;
+	// rasterize using LEE
+	case LEE_METHOD:
+		if( !rasterizeLEE( render, screenSpaceVerts ) )
+			return GZ_FAILURE;
+		break;
+	// unrecognized rasterization method
+	default:
+		AfxMessageBox( "Error: unknown rasterization method!!!\n" );
+		return GZ_FAILURE;
+	} // end switch( rasterizeMethod )
+
+	// now clean up after ourselves - free the 
+	free( screenSpaceVerts );
+	screenSpaceVerts = 0;
 
 	return GZ_SUCCESS;
 }
