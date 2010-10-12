@@ -905,13 +905,7 @@ int sortByYThenXCoord( const void * av1, const void * av2 )
 	else
 	{
 		// Y coordinates are exactly equal. Now sort by x coord.
-		float xDiff = arrayVertex1->vertex[X] - arrayVertex2->vertex[X];
-		if( xDiff < 0 )
-			return -1;
-		else if( xDiff > 0 )
-			return 1;
-		else
-			return 0; // this means we're dealing with an axis-aligned right triangle
+		return sortByXCoord( av1, av2 );
 	}
 }
 
