@@ -49,6 +49,6 @@ int tex_fun(float u, float v, GzColor color)
 /* Procedural texture function */
 int ptex_fun(float u, float v, GzColor color)
 {
-
+	return 0;
 }
 
