@@ -62,7 +62,7 @@ bool negateVector( const GzCoord origVec, GzCoord negatedVec );
 bool normalize( GzCoord vector );
 bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts );
 // from HW4
-bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, const GzCoord colorResult );
+bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, GzCoord colorResult );
 bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum ); 
 bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod );
 // from Professor
@@ -592,22 +592,22 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 			// only add a light if we have room for another one
 			if( render->numlights < MAX_LIGHTS )
 			{
-				GzColor * directionalLight;
-				directionalLight = ( static_cast<GzColor *>( valueList[i] ) );
-				render->lights[render->numlights].color[RED] = ( *directionalLight )[RED];
-				render->lights[render->numlights].color[GREEN] = ( *directionalLight )[GREEN];
-				render->lights[render->numlights].color[BLUE] = ( *directionalLight )[BLUE];
+				GzLight * directionalLight;
+				directionalLight = ( static_cast<GzLight *>( valueList[i] ) );
+				// copy light color
+				memcpy( render->lights[render->numlights].color, directionalLight->color, sizeof( GzColor ) );
+				// copy light direction
+				memcpy( render->lights[render->numlights].direction, directionalLight->direction, sizeof( GzCoord ) );
 
 				// another light has been added
 				render->numlights++;
 			}
 			break;
 		case GZ_AMBIENT_LIGHT: // set ambient light color
-			GzColor * ambientLight;
-			ambientLight = ( static_cast<GzColor *>( valueList[i] ) );
-			render->ambientlight.color[RED] = ( *ambientLight )[RED];
-			render->ambientlight.color[GREEN] = ( *ambientLight )[GREEN];
-			render->ambientlight.color[BLUE] = ( *ambientLight )[BLUE];
+			GzLight * ambientLight;
+			ambientLight = ( static_cast<GzLight *>( valueList[i] ) );
+			// copy ambient light color only. ambient light direction is irrelevant
+			memcpy( render->ambientlight.color, ambientLight->color, sizeof( GzColor ) );
 			break;
 		case GZ_AMBIENT_COEFFICIENT: // Ka ambient reflectance coef's
 			GzColor * coeffKa;
@@ -989,23 +989,17 @@ bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge )
 
 bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 )
 {
-	if( !result )
-	{
-		AfxMessageBox( "Error: cannot compute cross product - bad pointer!\n" );
-		return false;
-	}
-
 	GzCoord vec1, vec2;
 
 	// define edge1 vector
-	vec1[0] = edge1.end.vertex[0] - edge1.start.vertex[0];
-	vec1[1] = edge1.end.vertex[1] - edge1.start.vertex[1];
-	vec1[2] = edge1.end.vertex[2] - edge1.start.vertex[2];
+	vec1[X] = edge1.end.vertex[X] - edge1.start.vertex[X];
+	vec1[Y] = edge1.end.vertex[Y] - edge1.start.vertex[Y];
+	vec1[Z] = edge1.end.vertex[Z] - edge1.start.vertex[Z];
 
 	// define edge2 vector
-	vec2[0] = edge2.end.vertex[0] - edge2.start.vertex[0];
-	vec2[1] = edge2.end.vertex[1] - edge2.start.vertex[1];
-	vec2[2] = edge2.end.vertex[2] - edge2.start.vertex[2];
+	vec2[X] = edge2.end.vertex[X] - edge2.start.vertex[X];
+	vec2[Y] = edge2.end.vertex[Y] - edge2.start.vertex[Y];
+	vec2[Z] = edge2.end.vertex[Z] - edge2.start.vertex[Z];
 
 	// compute cross product
 	result[X] = vec1[Y] * vec2[Z] - vec1[Z] * vec2[Y];
@@ -1058,19 +1052,52 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 
 	// before rasterizing, calculate values needed for interpolation that can be calculated just once
 	GzCoord * vertColors = 0;
-	float normalsPlaneAX = 0, normalsPlaneBX = 0, normalsPlaneCX = 0, normalsPlaneDX = 0;
-	float normalsPlaneAY = 0, normalsPlaneBY = 0, normalsPlaneCY = 0, normalsPlaneDY = 0;
-	float normalsPlaneAZ = 0, normalsPlaneBZ = 0, normalsPlaneCZ = 0, normalsPlaneDZ = 0;
+	GzCoord imgSpaceVertsPlaneA, imgSpaceVertsPlaneB, imgSpaceVertsPlaneC, imgSpaceVertsPlaneD;
+	GzCoord imgSpaceNormalsPlaneA, imgSpaceNormalsPlaneB, imgSpaceNormalsPlaneC, imgSpaceNormalsPlaneD;
+
 	switch( render->interp_mode )
 	{
 	case GZ_COLOR: // Gouraud shading.
 		// need to compute the color at each vertex
 		vertColors = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
 		break;
-	case GZ_NORMAL:
-		//GzCoord normalInterpHelper;
+	case GZ_NORMALS:
+		GzCoord interpHelper1, interpHelper2, interpCrossProd;
+		// the X and Y values for the two vectors we need to take cross products of will not change - they are the X and Y pixel coords
+		interpHelper1[X] = edges[0].end.vertex[X] - edges[0].start.vertex[X];
+		interpHelper1[Y] = edges[0].end.vertex[Y] - edges[0].start.vertex[Y];
+		interpHelper2[X] = edges[1].end.vertex[X] - edges[1].start.vertex[X];
+		interpHelper2[Y] = edges[1].end.vertex[Y] - edges[1].start.vertex[Y];
 
-		// construct coeffecients for x component of normals
+		// construct coeffecients for all three components of vertices and normals
+		for( int compIdx = 0; compIdx < 3; compIdx++ )
+		{
+			/*
+			planeD = -( planeA * screenSpaceVerts[0][X] + planeB * screenSpaceVerts[0][Y] + planeC * screenSpaceVerts[0][Z] );
+			*/
+
+			// set up interpolation coefficients for vertices
+			interpHelper1[Z] = imageSpaceVerts[edges[0].end.origIdx][compIdx] - imageSpaceVerts[edges[0].start.origIdx][compIdx];
+			interpHelper2[Z] = imageSpaceVerts[edges[1].end.origIdx][compIdx] - imageSpaceVerts[edges[1].start.origIdx][compIdx];
+			vectorCross( interpHelper1, interpHelper2, interpCrossProd );
+			imgSpaceVertsPlaneA[compIdx] = interpCrossProd[X];
+			imgSpaceVertsPlaneB[compIdx] = interpCrossProd[Y];
+			imgSpaceVertsPlaneC[compIdx] = interpCrossProd[Z];
+			imgSpaceVertsPlaneD[compIdx] = -( imgSpaceVertsPlaneA[compIdx] * edges[0].start.vertex[X] + 
+				                                imgSpaceVertsPlaneB[compIdx] * edges[0].start.vertex[Y] + 
+										        imgSpaceVertsPlaneC[compIdx] * imageSpaceVerts[edges[0].start.origIdx][compIdx] );
+
+			// set up interpolation coefficients for normals
+			interpHelper1[Z] = imageSpaceNormals[edges[0].end.origIdx][compIdx] - imageSpaceNormals[edges[0].start.origIdx][compIdx];
+			interpHelper2[Z] = imageSpaceNormals[edges[1].end.origIdx][compIdx] - imageSpaceNormals[edges[1].start.origIdx][compIdx];
+			vectorCross( interpHelper1, interpHelper2, interpCrossProd );
+			imgSpaceNormalsPlaneA[compIdx] = interpCrossProd[X];
+			imgSpaceNormalsPlaneB[compIdx] = interpCrossProd[Y];
+			imgSpaceNormalsPlaneC[compIdx] = interpCrossProd[Z];
+			imgSpaceNormalsPlaneD[compIdx] = -( imgSpaceNormalsPlaneA[compIdx] * edges[0].start.vertex[X] + 
+				                                imgSpaceNormalsPlaneB[compIdx] * edges[0].start.vertex[Y] + 
+										        imgSpaceNormalsPlaneC[compIdx] * imageSpaceNormals[edges[0].start.origIdx][compIdx] );
+		}
 		
 		break;
 	}
@@ -1161,7 +1188,21 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 					break;
 				case GZ_NORMALS: // Phong shading
 					// first we must use bilinear interpolation to find the normal at this pixel
-					AfxMessageBox( "Error: don't know how to perform Phong shading yet!\n" );
+					GzCoord interpImageSpaceVert, interpImageSpaceNormal;
+					for( int compIdx = 0; compIdx < 3; compIdx++ )
+					{
+						interpImageSpaceVert[compIdx] = -( imgSpaceVertsPlaneA[compIdx] * pixelX + 
+							                               imgSpaceVertsPlaneB[compIdx] * pixelY  + 
+						                                   imgSpaceVertsPlaneD[compIdx] ) / imgSpaceVertsPlaneC[compIdx];
+
+						interpImageSpaceNormal[compIdx] = -( imgSpaceNormalsPlaneA[compIdx] * pixelX + 
+							                                 imgSpaceNormalsPlaneB[compIdx] * pixelY  + 
+						                                     imgSpaceNormalsPlaneD[compIdx] ) / imgSpaceNormalsPlaneC[compIdx];
+					}
+
+					// now we can compute the color
+					computeColor( render, interpImageSpaceVert, interpImageSpaceNormal, color );
+
 					break;
 				default:
 					// just use flat shading as the default
@@ -1528,11 +1569,8 @@ bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoor
 	KsComponent[RED] = KsComponent[GREEN] = KsComponent[BLUE] = KdComponent[RED] = KdComponent[GREEN] = KdComponent[BLUE] = 0;
 	for( int lightIdx = 0; lightIdx < render->numlights; lightIdx++ )
 	{
-		// Compute reflected ray. R = 2(N dot L)N - L   
-		GzCoord twoNdotLTimesN, reflectedRay;
+		// compute N dot L
 		float NdotL = vectorDot( imageSpaceNormal, render->lights[lightIdx].direction );
-		vectorScale( imageSpaceNormal, 2 * NdotL, twoNdotLTimesN );
-		vectorSub( twoNdotLTimesN, render->lights[lightIdx].direction, reflectedRay );
 
 		// In image space, the direction to the eye (e.g. camera) is simply (0, 0, -1)
 		GzCoord eyeDir;
@@ -1558,11 +1596,20 @@ bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoor
 		{
 			// flip normal
 			vectorScale( imageSpaceNormal, -1, newImageSpaceNormal );
+			// we've flipped the normal, so we need to flip NdotL & NdotE
+			NdotL *= -1;
+			NdotE *= -1;
 		}
 		else
 		{
 			continue;
 		}
+
+		// Compute reflected ray. R = 2(N dot L)N - L   
+		GzCoord twoNdotLTimesN, reflectedRay;
+		vectorScale( newImageSpaceNormal, 2 * NdotL, twoNdotLTimesN );
+		vectorSub( twoNdotLTimesN, render->lights[lightIdx].direction, reflectedRay );
+		normalize( reflectedRay );
 
 		// now add in the Kd and Ks contributions from this light
 		float RdotE = vectorDot( reflectedRay, eyeDir );
