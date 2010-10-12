@@ -62,7 +62,7 @@ bool negateVector( const GzCoord origVec, GzCoord negatedVec );
 bool normalize( GzCoord vector );
 bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts );
 // from HW4
-bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, GzCoord colorResult );
+bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, GzColor colorResult );
 bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum ); 
 bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod );
 // from Professor
@@ -1054,31 +1054,48 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 	endY = min( static_cast<int>( floor( maxY ) ), render->display->yres );
 
 	// before rasterizing, calculate values needed for interpolation that can be calculated just once
-	GzCoord * vertColors = 0;
+	// interpolation values for Gouraud shading:
+	GzColor colorPlaneA, colorPlaneB, colorPlaneC, colorPlaneD;
+	// interpolation values for Phong shading:
 	GzCoord imgSpaceVertsPlaneA, imgSpaceVertsPlaneB, imgSpaceVertsPlaneC, imgSpaceVertsPlaneD;
 	GzCoord imgSpaceNormalsPlaneA, imgSpaceNormalsPlaneB, imgSpaceNormalsPlaneC, imgSpaceNormalsPlaneD;
+
+	// we'll need to interpolate either colors or normals, so set up the pieces we know now
+	GzCoord interpHelper1, interpHelper2, interpCrossProd;
+	// the X and Y values for the two vectors we need to take cross products of will not change - they are the X and Y pixel coords
+	interpHelper1[X] = edges[0].end.vertex[X] - edges[0].start.vertex[X];
+	interpHelper1[Y] = edges[0].end.vertex[Y] - edges[0].start.vertex[Y];
+	interpHelper2[X] = edges[1].end.vertex[X] - edges[1].start.vertex[X];
+	interpHelper2[Y] = edges[1].end.vertex[Y] - edges[1].start.vertex[Y];
 
 	switch( render->interp_mode )
 	{
 	case GZ_COLOR: // Gouraud shading.
-		// need to compute the color at each vertex
-		vertColors = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
+		// compute the color at each vertex
+		GzColor vertColors[3];
+		for( int vertColorIdx = 0; vertColorIdx < 3; vertColorIdx++ )
+		{
+			computeColor( render, imageSpaceVerts[vertColorIdx], imageSpaceNormals[vertColorIdx], vertColors[vertColorIdx] );
+		}
+
+		// set up interpolation coefficients for each color component
+		for( int compIdx = 0; compIdx < 3; compIdx++ )
+		{
+			interpHelper1[Z] = vertColors[edges[0].end.origIdx][compIdx] - vertColors[edges[0].start.origIdx][compIdx];
+			interpHelper2[Z] = vertColors[edges[1].end.origIdx][compIdx] - vertColors[edges[1].start.origIdx][compIdx];
+			vectorCross( interpHelper1, interpHelper2, interpCrossProd );
+			colorPlaneA[compIdx] = interpCrossProd[X];
+			colorPlaneB[compIdx] = interpCrossProd[Y];
+			colorPlaneC[compIdx] = interpCrossProd[Z];
+			colorPlaneD[compIdx] = -( colorPlaneA[compIdx] * edges[0].start.vertex[X] + 
+									  colorPlaneB[compIdx] * edges[0].start.vertex[Y] + 
+									  colorPlaneC[compIdx] * vertColors[edges[0].start.origIdx][compIdx] );
+		}
 		break;
 	case GZ_NORMALS:
-		GzCoord interpHelper1, interpHelper2, interpCrossProd;
-		// the X and Y values for the two vectors we need to take cross products of will not change - they are the X and Y pixel coords
-		interpHelper1[X] = edges[0].end.vertex[X] - edges[0].start.vertex[X];
-		interpHelper1[Y] = edges[0].end.vertex[Y] - edges[0].start.vertex[Y];
-		interpHelper2[X] = edges[1].end.vertex[X] - edges[1].start.vertex[X];
-		interpHelper2[Y] = edges[1].end.vertex[Y] - edges[1].start.vertex[Y];
-
 		// construct coeffecients for all three components of vertices and normals
 		for( int compIdx = 0; compIdx < 3; compIdx++ )
 		{
-			/*
-			planeD = -( planeA * screenSpaceVerts[0][X] + planeB * screenSpaceVerts[0][Y] + planeC * screenSpaceVerts[0][Z] );
-			*/
-
 			// set up interpolation coefficients for vertices
 			interpHelper1[Z] = imageSpaceVerts[edges[0].end.origIdx][compIdx] - imageSpaceVerts[edges[0].start.origIdx][compIdx];
 			interpHelper2[Z] = imageSpaceVerts[edges[1].end.origIdx][compIdx] - imageSpaceVerts[edges[1].start.origIdx][compIdx];
@@ -1182,12 +1199,18 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 			// if the interpolated z value is smaller than the current z value, write pixel to framebuffer
 			if( interpZ < z )
 			{
-				GzCoord color;
+				GzColor color;
 				// calculate appropriate color based on selected interpolation method
 				switch( render->interp_mode )
 				{
 				case GZ_COLOR: // Gourad shading
-					AfxMessageBox( "Error: don't know how to perform Gouraud shading yet!\n" );
+					// just interpolate the pre-calculated vertex colors at this pixel
+					for( int compIdx = 0; compIdx < 3; compIdx++ )
+					{
+						color[compIdx] = -( colorPlaneA[compIdx] * pixelX + 
+							                colorPlaneB[compIdx] * pixelY  + 
+						                    colorPlaneD[compIdx] ) / colorPlaneC[compIdx];
+					}
 					break;
 				case GZ_NORMALS: // Phong shading
 					// first we must use bilinear interpolation to find the normal at this pixel
@@ -1230,13 +1253,6 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 			}
 		} // end column for loop (X)
 	} // end row for loop (Y)
-
-	// clean up after ourselves
-	if( vertColors )
-	{
-		free( vertColors );
-		vertColors = 0;
-	}
 
 	return true;
 }
@@ -1558,7 +1574,7 @@ bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts )
 
 /* BEGIN HW4 FUNCTIONS */
 
-bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoord imageSpaceNormal, GzCoord colorResult )
+bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoord imageSpaceNormal, GzColor colorResult )
 {
 	// check for bad pointer
 	if( !render )
@@ -1624,7 +1640,7 @@ bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoor
 		if( RdotE < 0 )
 			RdotE = 0;
 
-		GzCoord tempKsComp, tempKdComp;
+		GzColor tempKsComp, tempKdComp;
 		vectorScale( render->lights[lightIdx].color, pow( RdotE, render->spec ), tempKsComp );
 		vectorScale( render->lights[lightIdx].color, NdotL, tempKdComp );	
 
