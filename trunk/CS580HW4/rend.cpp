@@ -599,6 +599,9 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 				// copy light direction
 				memcpy( render->lights[render->numlights].direction, directionalLight->direction, sizeof( GzCoord ) );
 
+				// just to be safe, make sure the light direction is normalized
+				normalize( render->lights[render->numlights].direction );
+
 				// another light has been added
 				render->numlights++;
 			}
@@ -1200,7 +1203,9 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 						                                     imgSpaceNormalsPlaneD[compIdx] ) / imgSpaceNormalsPlaneC[compIdx];
 					}
 
-					// now we can compute the color
+					// now that we have the interpolated normal, make sure it's normalized
+					normalize( interpImageSpaceNormal );
+					// now we can compute the color using the interpolated normal
 					computeColor( render, interpImageSpaceVert, interpImageSpaceNormal, color );
 
 					break;
@@ -1576,6 +1581,7 @@ bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoor
 		GzCoord eyeDir;
 		eyeDir[X] = eyeDir[Y] = 0;
 		eyeDir[Z] = -1;
+		// no need to normalize the eye direction explicitly; it's defined to be a unit vector
 
 		// compute N dot E
 		float NdotE = vectorDot( imageSpaceNormal, eyeDir );
@@ -1609,6 +1615,7 @@ bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoor
 		GzCoord twoNdotLTimesN, reflectedRay;
 		vectorScale( newImageSpaceNormal, 2 * NdotL, twoNdotLTimesN );
 		vectorSub( twoNdotLTimesN, render->lights[lightIdx].direction, reflectedRay );
+		// make sure reflected ray is normalized
 		normalize( reflectedRay );
 
 		// now add in the Kd and Ks contributions from this light
