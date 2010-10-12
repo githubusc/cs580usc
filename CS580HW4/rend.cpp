@@ -28,15 +28,21 @@ enum EdgeType
 
 typedef struct
 {
-	GzCoord start;
-	GzCoord end;
+	GzCoord vertex;
+	int origIdx;
+} ArrayVertex;
+
+typedef struct
+{
+	ArrayVertex start;
+	ArrayVertex end;
 	EdgeType type;
 } Edge;
 
 /*** HELPER FUNCTION DECLARATIONS ***/
 // from HW2
-int sortByXCoord( const void * c1, const void * c2 ); // helper function for getting bounding box around tri (used with qsort)
-int sortByYThenXCoord( const void * c1, const void * c2 ); // helper function for sorting tri verts (used with qsort)
+int sortByXCoord( const void * av1, const void * av2 ); // helper function for getting bounding box around tri (used with qsort)
+int sortByYThenXCoord( const void * av1, const void * av2 ); // helper function for sorting tri array vertices (used with qsort)
 bool orderTriVertsCCW( Edge edges[3], GzCoord * verts ); 
 bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, GzCoord * verts );
 bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge );
@@ -769,8 +775,15 @@ bool orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 		return false;
 	}
 
+	ArrayVertex arrayVertices[3];
+	for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
+	{
+		memcpy( arrayVertices[vertIdx].vertex, verts[vertIdx], sizeof( GzCoord ) );
+		arrayVertices[vertIdx].origIdx = vertIdx;
+	}
+
 	// first sort vertices by Y coordinate (low to high)
-	qsort( verts, 3, sizeof( GzCoord ), sortByYThenXCoord );
+	qsort( arrayVertices, 3, sizeof( ArrayVertex ), sortByYThenXCoord );
 
 	/*	
 	 * now the CCW oriented edges are either:
@@ -797,72 +810,72 @@ bool orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 	 */
 
 	// check to see if any two y-coords are equal; since they're ordered by Y first, equal Y coords will be adjacent
-	if( verts[0][Y] == verts[1][Y] ) // 2 Y coords are equal
+	if( arrayVertices[0].vertex[Y] == arrayVertices[1].vertex[Y] ) // 2 Y coords are equal
 	{
 		// since verts are sorted by Y first, we know that 3rd vert has a greater Y than the other 2
-		memcpy( edges[0].start, verts[1], sizeof( GzCoord ) );
-		memcpy( edges[0].end, verts[0], sizeof( GzCoord ) );
+		edges[0].start = arrayVertices[1];
+		edges[0].end = arrayVertices[0];
 		edges[0].type = COLORED;
 
-		memcpy( edges[1].start, verts[0], sizeof( GzCoord ) );
-		memcpy( edges[1].end, verts[2], sizeof( GzCoord ) );
+		edges[1].start = arrayVertices[0];
+		edges[1].end = arrayVertices[2];
 		edges[1].type = COLORED;
 
-		memcpy( edges[2].start, verts[2], sizeof( GzCoord ) );
-		memcpy( edges[2].end, verts[1], sizeof( GzCoord ) );
+		edges[2].start = arrayVertices[2];
+		edges[2].end = arrayVertices[1];
 		edges[2].type = UNCOLORED;
 	}
-	else if( verts[1][Y] == verts[2][Y] ) // 2 Y coords are equal
+	else if( arrayVertices[1].vertex[Y] == arrayVertices[2].vertex[Y] ) // 2 Y coords are equal
 	{
 		// since verts are sorted by Y first, we know that the 1st vert has a smaller Y than the other 2
-		memcpy( edges[0].start, verts[0], sizeof( GzCoord ) );
-		memcpy( edges[0].end, verts[1], sizeof( GzCoord ) );
+		edges[0].start = arrayVertices[0];
+		edges[0].end = arrayVertices[1];
 		edges[0].type = COLORED;
 
-		memcpy( edges[1].start, verts[1], sizeof( GzCoord ) );
-		memcpy( edges[1].end, verts[2], sizeof( GzCoord ) );
+		edges[1].start = arrayVertices[1];
+		edges[1].end = arrayVertices[2];
 		edges[1].type = UNCOLORED;
 
-		memcpy( edges[2].start, verts[2], sizeof( GzCoord ) );
-		memcpy( edges[2].end, verts[0], sizeof( GzCoord ) );
+		edges[2].start = arrayVertices[2];
+		edges[2].end = arrayVertices[0];
 		edges[2].type = UNCOLORED;
 	}
 	else // all 3 Y coords are distinct
 	{
 		// formulate line equation for v0 - v2
-		float slope = ( verts[2][Y] - verts[0][Y] ) / ( verts[2][X] - verts[0][X] );
+		float slope = ( arrayVertices[2].vertex[Y] - arrayVertices[0].vertex[Y] ) / ( arrayVertices[2].vertex[X] - arrayVertices[0].vertex[X] );
 		// use slope to find point along v0 - v2 line with same y coord as v1's y coord
 		// y - y1 = m( x - x1 ) => x = ( ( y - y1 )/m ) + x1. We'll use vert0 for x1 and y1.
-		float midpointX = ( ( verts[1][Y] - verts[0][Y] ) / slope ) + verts[0][X];
+		float midpointX = ( ( arrayVertices[1].vertex[Y] - arrayVertices[0].vertex[Y] ) / slope ) + arrayVertices[0].vertex[X];
 
 		// midpointX is less than v1's x, so all edges touching v1 are uncolored
-		if( midpointX < verts[1][X] )
+		if( midpointX < arrayVertices[1].vertex[X] )
 		{
-			memcpy( edges[0].start, verts[0], sizeof( GzCoord ) );
-			memcpy( edges[0].end, verts[2], sizeof( GzCoord ) );
+			edges[0].start = arrayVertices[0];
+			edges[0].end = arrayVertices[2];
 			edges[0].type = COLORED;
 
-			memcpy( edges[1].start, verts[2], sizeof( GzCoord ) );
-			memcpy( edges[1].end, verts[1], sizeof( GzCoord ) );
+			edges[1].start = arrayVertices[2];
+			edges[1].end = arrayVertices[1];
 			edges[1].type = UNCOLORED;
 
-			memcpy( edges[2].start, verts[1], sizeof( GzCoord ) );
-			memcpy( edges[2].end, verts[0], sizeof( GzCoord ) );
+			edges[2].start = arrayVertices[1];
+			edges[2].end = arrayVertices[0];
 			edges[2].type = UNCOLORED;
 		}
 		// midpoint X is greater than v1's x, so all edges touching v1 are colored
-		else if( midpointX > verts[1][X] )
+		else if( midpointX > arrayVertices[1].vertex[X] )
 		{
-			memcpy( edges[0].start, verts[0], sizeof( GzCoord ) );
-			memcpy( edges[0].end, verts[1], sizeof( GzCoord ) );
+			edges[0].start = arrayVertices[0];
+			edges[0].end = arrayVertices[1];
 			edges[0].type = COLORED;
 
-			memcpy( edges[1].start, verts[1], sizeof( GzCoord ) );
-			memcpy( edges[1].end, verts[2], sizeof( GzCoord ) );
+			edges[1].start = arrayVertices[1];
+			edges[1].end = arrayVertices[2];
 			edges[1].type = COLORED;
 
-			memcpy( edges[2].start, verts[2], sizeof( GzCoord ) );
-			memcpy( edges[2].end, verts[0], sizeof( GzCoord ) );
+			edges[2].start = arrayVertices[2];
+			edges[2].end = arrayVertices[0];
 			edges[2].type = UNCOLORED;
 		}
 		// they are exactly equal. this shouldn't happen.
@@ -876,13 +889,13 @@ bool orderTriVertsCCW( Edge edges[3], GzCoord * verts )
 	return true;
 }
 
-int sortByYThenXCoord( const void * c1, const void * c2 )
+int sortByYThenXCoord( const void * av1, const void * av2 )
 {
-	GzCoord * coord1 = ( GzCoord * )c1;
-	GzCoord * coord2 = ( GzCoord * )c2;
+	ArrayVertex * arrayVertex1 = ( ArrayVertex * )av1;
+	ArrayVertex * arrayVertex2 = ( ArrayVertex * )av2;
 
 	// find the difference in Y coordinate values
-	float yDiff = ( *coord1 )[Y] - ( *coord2 )[Y];
+	float yDiff = arrayVertex1->vertex[Y] - arrayVertex2->vertex[Y];
 
 	// need to return an int, so just categorize by sign
 	if( yDiff < 0 )
@@ -892,7 +905,7 @@ int sortByYThenXCoord( const void * c1, const void * c2 )
 	else
 	{
 		// Y coordinates are exactly equal. Now sort by x coord.
-		float xDiff = ( *coord1 )[X] - ( *coord2 )[X];
+		float xDiff = arrayVertex1->vertex[X] - arrayVertex2->vertex[X];
 		if( xDiff < 0 )
 			return -1;
 		else if( xDiff > 0 )
@@ -902,12 +915,12 @@ int sortByYThenXCoord( const void * c1, const void * c2 )
 	}
 }
 
-int sortByXCoord( const void * c1, const void * c2 )
+int sortByXCoord( const void * av1, const void * av2 )
 {
-	GzCoord * coord1 = ( GzCoord * )c1;
-	GzCoord * coord2 = ( GzCoord * )c2;
+	ArrayVertex * arrayVertex1 = ( ArrayVertex * )av1;
+	ArrayVertex * arrayVertex2 = ( ArrayVertex * )av2;
 
-	float xDiff = ( *coord1 )[X] - ( *coord2 )[X];
+	float xDiff = arrayVertex1->vertex[X] - arrayVertex2->vertex[X];
 	if( xDiff < 0 )
 		return -1;
 	else if( xDiff > 0 )
@@ -924,13 +937,20 @@ bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, 
 		return false;
 	}
 
-	qsort( verts, 3, sizeof( GzCoord ), sortByXCoord );
-	*minX = verts[0][X];
-	*maxX = verts[2][X];
+	ArrayVertex arrayVertices[3];
+	for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
+	{
+		memcpy( arrayVertices[vertIdx].vertex, verts[vertIdx], sizeof( GzCoord ) );
+		arrayVertices[vertIdx].origIdx = vertIdx;
+	}
 
-	qsort( verts, 3, sizeof( GzCoord ), sortByYThenXCoord );
-	*minY = verts[0][Y];
-	*maxY = verts[2][Y];
+	qsort( arrayVertices, 3, sizeof( ArrayVertex ), sortByXCoord );
+	*minX = arrayVertices[0].vertex[X];
+	*maxX = arrayVertices[2].vertex[X];
+
+	qsort( arrayVertices, 3, sizeof( ArrayVertex ), sortByYThenXCoord );
+	*minY = arrayVertices[0].vertex[Y];
+	*maxY = arrayVertices[2].vertex[Y];
 
 	return true;
 }
@@ -960,11 +980,11 @@ bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge )
 	 *   C = dXY – dYX    (Compute A,B,C from edge verts)
 	 */
 
-	float varX = edge.start[0];
-	float varY = edge.start[1];
+	float varX = edge.start.vertex[0];
+	float varY = edge.start.vertex[1];
 
-	float dX = edge.end[0] - varX;
-	float dY = edge.end[1] - varY;
+	float dX = edge.end.vertex[0] - varX;
+	float dY = edge.end.vertex[1] - varY;
 
 	*A = dY;
 	*B = -dX;
@@ -984,14 +1004,14 @@ bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 )
 	GzCoord vec1, vec2;
 
 	// define edge1 vector
-	vec1[0] = edge1.end[0] - edge1.start[0];
-	vec1[1] = edge1.end[1] - edge1.start[1];
-	vec1[2] = edge1.end[2] - edge1.start[2];
+	vec1[0] = edge1.end.vertex[0] - edge1.start.vertex[0];
+	vec1[1] = edge1.end.vertex[1] - edge1.start.vertex[1];
+	vec1[2] = edge1.end.vertex[2] - edge1.start.vertex[2];
 
 	// define edge2 vector
-	vec2[0] = edge2.end[0] - edge2.start[0];
-	vec2[1] = edge2.end[1] - edge2.start[1];
-	vec2[2] = edge2.end[2] - edge2.start[2];
+	vec2[0] = edge2.end.vertex[0] - edge2.start.vertex[0];
+	vec2[1] = edge2.end.vertex[1] - edge2.start.vertex[1];
+	vec2[2] = edge2.end.vertex[2] - edge2.start.vertex[2];
 
 	// compute cross product
 	result[X] = vec1[Y] * vec2[Z] - vec1[Z] * vec2[Y];
@@ -1041,6 +1061,26 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 	// make sure ending pixel value is within display size
 	endX = min( static_cast<int>( floor( maxX ) ), render->display->xres );
 	endY = min( static_cast<int>( floor( maxY ) ), render->display->yres );
+
+	// before rasterizing, calculate values needed for interpolation that can be calculated just once
+	GzCoord * vertColors = 0;
+	float normalsPlaneAX = 0, normalsPlaneBX = 0, normalsPlaneCX = 0, normalsPlaneDX = 0;
+	float normalsPlaneAY = 0, normalsPlaneBY = 0, normalsPlaneCY = 0, normalsPlaneDY = 0;
+	float normalsPlaneAZ = 0, normalsPlaneBZ = 0, normalsPlaneCZ = 0, normalsPlaneDZ = 0;
+	switch( render->interp_mode )
+	{
+	case GZ_COLOR: // Gouraud shading.
+		// need to compute the color at each vertex
+		vertColors = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
+		break;
+	case GZ_NORMAL:
+		//GzCoord normalInterpHelper;
+
+		// construct coeffecients for x component of normals
+		
+		break;
+	}
+
 
 	// now walk through all pixels within bounding box and rasterize
 	// Y coords are rows 
@@ -1150,6 +1190,13 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 			}
 		} // end column for loop (X)
 	} // end row for loop (Y)
+
+	// clean up after ourselves
+	if( vertColors )
+	{
+		free( vertColors );
+		vertColors = 0;
+	}
 
 	return true;
 }
