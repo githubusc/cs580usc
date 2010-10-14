@@ -1115,7 +1115,7 @@ bool constructCameraXforms( GzRender * render )
 
 	// recall that d comes from the camera's field of view [1/d = tan( FOV /2 ), so d = 1 / ( tan( FOV / 2 ) )]. 
 	// since FOV is in degrees, we must first convert to radians.
-	float radianFOV = ( float )( render->camera.FOV * ( PI / 180 ) );
+	float radianFOV = ( float )DEG_TO_RAD( render->camera.FOV );
 	float d = 1 / tan( radianFOV / 2 );
 
 	// Construct Xpi
