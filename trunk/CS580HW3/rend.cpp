@@ -838,9 +838,10 @@ bool rasterizeLEE( GzRender * render, GzCoord * verts )
 	// make sure starting pixel value is non-negative
 	startX = max( static_cast<int>( ceil( minX ) ), 0 );
 	startY = max( static_cast<int>( ceil( minY ) ), 0 );
-	// make sure ending pixel value is within display size
-	endX = min( static_cast<int>( floor( maxX ) ), render->display->xres );
-	endY = min( static_cast<int>( floor( maxY ) ), render->display->yres );
+	// make sure ending pixel value is within display size 
+	// (note that pixel indeces are 0-based, so the maximum value for X and Y are xres - 1 and yres - 1, respectively
+	endX = min( static_cast<int>( floor( maxX ) ), render->display->xres - 1 );
+	endY = min( static_cast<int>( floor( maxY ) ), render->display->yres - 1 );
 
 	// now walk through all pixels within bounding box and rasterize
 	// Y coords are rows 
@@ -912,7 +913,8 @@ bool rasterizeLEE( GzRender * render, GzCoord * verts )
 			// returns a non-zero value for failure
 			if( GzGetDisplay( render->display, pixelX, pixelY, &r, &g, &b, &a, &z ) )
 			{
-				return false;
+				// NOTE: this shouldn't happen. But just in case it does, simply skip this pixel, not the whole triangle.
+				continue;
 			}
 
 			// if the interpolated z value is smaller than the current z value, write pixel to framebuffer
