@@ -7,6 +7,7 @@
 #include	"rend.h"
 
 #define PI 3.14159265
+#define DEG_TO_RAD( degrees ) ( degrees * PI / 180 )
 
 // to help with matrix transform stack
 #define EMPTY_STACK -1
@@ -82,6 +83,8 @@ int GzRotXMat(float degree, GzMatrix mat)
  *	0		0			0			1
  */
 
+	float radians = DEG_TO_RAD( degree );
+
 	// row 0
 	mat[0][0] = 1;
 	mat[0][1] = 0;
@@ -90,14 +93,14 @@ int GzRotXMat(float degree, GzMatrix mat)
 
 	// row 1
 	mat[1][0] = 0;
-	mat[1][1] = cos( degree );
-	mat[1][2] = -sin( degree );
+	mat[1][1] = cos( radians );
+	mat[1][2] = -sin( radians );
 	mat[1][3] = 0;
 
 	// row 2
 	mat[2][0] = 0;
-	mat[2][1] = sin( degree );
-	mat[2][2] = cos( degree );
+	mat[2][1] = sin( radians );
+	mat[2][2] = cos( radians );
 	mat[2][3] = 0;
 
 	// row 3
@@ -123,10 +126,12 @@ int GzRotYMat(float degree, GzMatrix mat)
  *	0			0			0			1
  */
 
+	float radians = DEG_TO_RAD( degree );
+
 	// row 0
-	mat[0][0] = cos( degree );
+	mat[0][0] = cos( radians );
 	mat[0][1] = 0;
-	mat[0][2] = sin( degree );
+	mat[0][2] = sin( radians );
 	mat[0][3] = 0;
 
 	// row 1
@@ -136,9 +141,9 @@ int GzRotYMat(float degree, GzMatrix mat)
 	mat[1][3] = 0;
 
 	// row 2
-	mat[2][0] = -sin( degree );
+	mat[2][0] = -sin( radians );
 	mat[2][1] = 0;
-	mat[2][2] = cos( degree );
+	mat[2][2] = cos( radians );
 	mat[2][3] = 0;
 
 	// row 3
@@ -164,15 +169,17 @@ int GzRotZMat(float degree, GzMatrix mat)
  *	0			0			0		1	
  */
 
+	float radians = DEG_TO_RAD( degree );
+
 	// row 0
-	mat[0][0] = cos( degree );
-	mat[0][1] = -sin( degree );
+	mat[0][0] = cos( radians );
+	mat[0][1] = -sin( radians );
 	mat[0][2] = 0;
 	mat[0][3] = 0;
 
 	// row 1
-	mat[1][0] = sin( degree );
-	mat[1][1] = cos( degree );
+	mat[1][0] = sin( radians );
+	mat[1][1] = cos( radians );
 	mat[1][2] = 0;
 	mat[1][3] = 0;
 
@@ -1050,8 +1057,9 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 	startX = max( static_cast<int>( ceil( minX ) ), 0 );
 	startY = max( static_cast<int>( ceil( minY ) ), 0 );
 	// make sure ending pixel value is within display size
-	endX = min( static_cast<int>( floor( maxX ) ), render->display->xres );
-	endY = min( static_cast<int>( floor( maxY ) ), render->display->yres );
+	// (note that pixel indeces are 0-based, so the maximum value for X and Y are xres - 1 and yres - 1, respectively
+	endX = min( static_cast<int>( floor( maxX ) ), render->display->xres - 1 );
+	endY = min( static_cast<int>( floor( maxY ) ), render->display->yres - 1 );
 
 	// before rasterizing, calculate values needed for interpolation that can be calculated just once
 	// interpolation values for Gouraud shading:
@@ -1193,7 +1201,8 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 			// returns a non-zero value for failure
 			if( GzGetDisplay( render->display, pixelX, pixelY, &r, &g, &b, &a, &z ) )
 			{
-				return false;
+				// NOTE: this shouldn't happen. But just in case it does, simply skip this pixel, not the whole triangle.
+				continue;
 			}
 
 			// if the interpolated z value is smaller than the current z value, write pixel to framebuffer
@@ -1397,8 +1406,7 @@ bool constructXsp( GzRender * render )
 	 */
 
 	// since FOV is in degrees, we must first convert to radians.
-	float radianFOV = ( float )( render->camera.FOV * ( PI / 180 ) );
-	float d = 1 / tan( radianFOV / 2 );
+	float d = ( float )( 1 / tan( DEG_TO_RAD( render->camera.FOV ) / 2 ) );
 
 	// row 0
 	render->Xsp[0][0] = render->display->xres / ( float )2; // upcast the denominator to maintain accuracy
@@ -1438,7 +1446,7 @@ bool constructCameraXforms( GzRender * render )
 
 	// recall that d comes from the camera's field of view [1/d = tan( FOV /2 ), so d = 1 / ( tan( FOV / 2 ) )]. 
 	// since FOV is in degrees, we must first convert to radians.
-	float radianFOV = ( float )( render->camera.FOV * ( PI / 180 ) );
+	float radianFOV = ( float )DEG_TO_RAD( render->camera.FOV );
 	float d = 1 / tan( radianFOV / 2 );
 
 	// Construct Xpi
