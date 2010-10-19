@@ -48,7 +48,7 @@ bool orderTriVertsCCW( Edge edges[3], GzCoord * verts );
 bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, GzCoord * verts );
 bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge );
 bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 );
-bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imageSpaceVerts, GzCoord * imageSpaceNormals );
+bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imageSpaceVerts, GzCoord * imageSpaceNormals, GzTextureIndex * textureCoords );
 // from HW3
 bool constructCameraXforms( GzRender * render );
 bool constructXsp( GzRender * render );
@@ -692,9 +692,10 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 	GzCoord * imageSpaceVerts = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
 	GzCoord * imageSpaceNormals = ( GzCoord * )malloc( 3 * sizeof( GzCoord ) );
 	
-	// prepare for pointers to 3 vertices and 3 normals
+	// prepare for pointers to 3 vertices, 3 normals, and 3 sets of texture coords
 	GzCoord * modelSpaceVerts = 0;
 	GzCoord * modelSpaceNormals = 0;
+	GzTextureIndex * textureCoords = 0;
 
 	for( int i = 0; i < numParts; i++ )
 	{
@@ -731,6 +732,7 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 			modelSpaceNormals = static_cast<GzCoord *>( valueList[i] );
 			break; // end case: GZ_NORMAL
 		case GZ_TEXTURE_INDEX:
+			textureCoords = static_cast<GzTextureIndex *>( valueList[i] );
 			break; // end case: GZ_TEXTURE_INDEX
 		} // end switch( nameList[i] )
 	} // end loop over numparts
@@ -759,7 +761,7 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 		break;
 	// rasterize using LEE
 	case LEE_METHOD:
-		if( !rasterizeLEE( render, screenSpaceVerts, imageSpaceVerts, imageSpaceNormals ) )
+		if( !rasterizeLEE( render, screenSpaceVerts, imageSpaceVerts, imageSpaceNormals, textureCoords ) )
 			return GZ_FAILURE;
 		break;
 	// unrecognized rasterization method
@@ -1030,7 +1032,8 @@ bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 )
 	return true;
 }
 
-bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imageSpaceVerts, GzCoord * imageSpaceNormals )
+bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, 
+				   GzCoord * imageSpaceVerts, GzCoord * imageSpaceNormals, GzTextureIndex * textureCoords )
 {
 	// get bounding box around triangle
 	float minX, maxX, minY, maxY;
