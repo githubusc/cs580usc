@@ -63,7 +63,7 @@ bool negateVector( const GzCoord origVec, GzCoord negatedVec );
 bool normalize( GzCoord vector );
 bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts );
 // from HW4
-bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, GzColor colorResult );
+bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, const GzTextureIndex textureCoords, GzColor colorResult );
 bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum ); 
 bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod );
 // from HW5
@@ -1097,7 +1097,11 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 		GzColor vertColors[3];
 		for( int vertColorIdx = 0; vertColorIdx < 3; vertColorIdx++ )
 		{
-			computeColor( render, imageSpaceVerts[vertColorIdx], imageSpaceNormals[vertColorIdx], vertColors[vertColorIdx] );
+			computeColor( render, 
+				          imageSpaceVerts[vertColorIdx], 
+						  imageSpaceNormals[vertColorIdx], 
+						  textureCoords[vertColorIdx],
+						  vertColors[vertColorIdx] );
 		}
 
 		// set up interpolation coefficients for each color component
@@ -1246,6 +1250,7 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 				case GZ_NORMALS: // Phong shading
 					// first we must use bilinear interpolation to find the normal at this pixel
 					GzCoord interpImageSpaceVert, interpImageSpaceNormal;
+					GzTextureIndex interpTextureCoords;
 					for( int compIdx = 0; compIdx < 3; compIdx++ )
 					{
 						interpImageSpaceVert[compIdx] = interpolateWithPlanCoeffs( imgSpaceVertsPlaneA[compIdx],
@@ -1264,7 +1269,7 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 					// now that we have the interpolated normal, make sure it's normalized
 					normalize( interpImageSpaceNormal );
 					// now we can compute the color using the interpolated normal
-					computeColor( render, interpImageSpaceVert, interpImageSpaceNormal, color );
+					computeColor( render, interpImageSpaceVert, interpImageSpaceNormal, interpTextureCoords, color );
 
 					break;
 				default:
@@ -1608,7 +1613,8 @@ bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts )
 
 /* BEGIN HW4 FUNCTIONS */
 
-bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoord imageSpaceNormal, GzColor colorResult )
+bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoord imageSpaceNormal, const GzTextureIndex textureCoords, 
+				   GzColor colorResult )
 {
 	// check for bad pointer
 	if( !render )
