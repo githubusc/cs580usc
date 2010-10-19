@@ -355,6 +355,9 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 	// use flat shading as the default interpolation mode
 	tmpRenderer->interp_mode = GZ_RGB_COLOR;
 
+	// default to NOT using a texture function.
+	tmpRenderer->tex_fun = 0;
+
 	// the rest of the struct members will be initialized in GzBeginRender.
 
 	*render = tmpRenderer;
@@ -647,6 +650,11 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 			float * specPower;
 			specPower = ( static_cast<float *>( valueList[i] ) );
 			render->spec = *specPower;
+			break;
+		case GZ_TEXTURE_MAP: // texture function
+			GzTexture * textureFunction;
+			textureFunction = ( static_cast<GzTexture *>( valueList[i] ) );
+			render->tex_fun = *textureFunction;
 			break;
 		}
 	}
