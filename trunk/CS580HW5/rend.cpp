@@ -67,7 +67,8 @@ bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoo
 bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum ); 
 bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod );
 // from HW5
-float computePlaneDValue( float planeA, float planeB, float planeC, float imageSpaceX, float imageSpaceY, float paramToInterp );
+float computePlaneDValue( float planeA, float planeB, float planeC, float pixelX, float pixelY, float paramToInterp );
+float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, int pixelX, int pixelY );
 // from Professor
 short ctoi( float color );
 /*** END HELPER FUNCTION DECLARATIONS ***/
@@ -1198,7 +1199,7 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 			// if we're here, the pixel should be shaded. 
 			// First interpolate Z and check value against z-buffer
 			// Ax + By + Cz + D = 0 => z = -( Ax + By + D ) / C
-			float interpZ = -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
+			float interpZ = interpolateWithPlanCoeffs( planeA, planeB, planeC, planeD, pixelX, pixelY );
 
 			// don't render pixels of triangles that reside behind camera
 			if( interpZ < 0 )
@@ -1224,9 +1225,11 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 					// just interpolate the pre-calculated vertex colors at this pixel
 					for( int compIdx = 0; compIdx < 3; compIdx++ )
 					{
-						color[compIdx] = -( colorPlaneA[compIdx] * pixelX + 
-							                colorPlaneB[compIdx] * pixelY  + 
-						                    colorPlaneD[compIdx] ) / colorPlaneC[compIdx];
+						color[compIdx] = interpolateWithPlanCoeffs( colorPlaneA[compIdx], 
+							                                        colorPlaneB[compIdx],
+																	colorPlaneC[compIdx], 
+							                                        colorPlaneD[compIdx],
+																	pixelX, pixelY );
 					}
 					break;
 				case GZ_NORMALS: // Phong shading
@@ -1234,13 +1237,17 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 					GzCoord interpImageSpaceVert, interpImageSpaceNormal;
 					for( int compIdx = 0; compIdx < 3; compIdx++ )
 					{
-						interpImageSpaceVert[compIdx] = -( imgSpaceVertsPlaneA[compIdx] * pixelX + 
-							                               imgSpaceVertsPlaneB[compIdx] * pixelY  + 
-						                                   imgSpaceVertsPlaneD[compIdx] ) / imgSpaceVertsPlaneC[compIdx];
+						interpImageSpaceVert[compIdx] = interpolateWithPlanCoeffs( imgSpaceVertsPlaneA[compIdx],
+							                                                       imgSpaceVertsPlaneB[compIdx],
+																				   imgSpaceVertsPlaneC[compIdx],
+							                                                       imgSpaceVertsPlaneD[compIdx],
+																				   pixelX, pixelY );
 
-						interpImageSpaceNormal[compIdx] = -( imgSpaceNormalsPlaneA[compIdx] * pixelX + 
-							                                 imgSpaceNormalsPlaneB[compIdx] * pixelY  + 
-						                                     imgSpaceNormalsPlaneD[compIdx] ) / imgSpaceNormalsPlaneC[compIdx];
+						interpImageSpaceNormal[compIdx] = interpolateWithPlanCoeffs( imgSpaceNormalsPlaneA[compIdx],
+							                                                         imgSpaceNormalsPlaneB[compIdx],
+																				     imgSpaceNormalsPlaneC[compIdx],
+							                                                         imgSpaceNormalsPlaneD[compIdx],
+																				     pixelX, pixelY );
 					}
 
 					// now that we have the interpolated normal, make sure it's normalized
@@ -1700,9 +1707,14 @@ bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord pr
 
 /* HW5 FUNCTIONS */
 
-float computePlaneDValue( float planeA, float planeB, float planeC, float screenSpaceX, float screenSpaceY, float paramToInterp )
+float computePlaneDValue( float planeA, float planeB, float planeC, float pixelX, float pixelY, float paramToInterp )
 {
-	return -( planeA * screenSpaceX + planeB * screenSpaceY + planeC * paramToInterp );
+	return -( planeA * pixelX + planeB * pixelY + planeC * paramToInterp );
+}
+
+float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, int pixelX, int pixelY )
+{
+	return -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
 }
 
 /* END HW5 FUNCTIONS */
