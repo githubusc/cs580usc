@@ -66,6 +66,8 @@ bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts );
 bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, GzColor colorResult );
 bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum ); 
 bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod );
+// from HW5
+float computePlaneDValue( float planeA, float planeB, float planeC, float imageSpaceX, float imageSpaceY, float paramToInterp );
 // from Professor
 short ctoi( float color );
 /*** END HELPER FUNCTION DECLARATIONS ***/
@@ -83,7 +85,7 @@ int GzRotXMat(float degree, GzMatrix mat)
  *	0		0			0			1
  */
 
-	float radians = DEG_TO_RAD( degree );
+	float radians = ( float )DEG_TO_RAD( degree );
 
 	// row 0
 	mat[0][0] = 1;
@@ -126,7 +128,7 @@ int GzRotYMat(float degree, GzMatrix mat)
  *	0			0			0			1
  */
 
-	float radians = DEG_TO_RAD( degree );
+	float radians = ( float )DEG_TO_RAD( degree );
 
 	// row 0
 	mat[0][0] = cos( radians );
@@ -169,7 +171,7 @@ int GzRotZMat(float degree, GzMatrix mat)
  *	0			0			0		1	
  */
 
-	float radians = DEG_TO_RAD( degree );
+	float radians = ( float )DEG_TO_RAD( degree );
 
 	// row 0
 	mat[0][0] = cos( radians );
@@ -1050,7 +1052,7 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 	planeA = crossProduct[X];
 	planeB = crossProduct[Y];
 	planeC = crossProduct[Z];
-	planeD = -( planeA * screenSpaceVerts[0][X] + planeB * screenSpaceVerts[0][Y] + planeC * screenSpaceVerts[0][Z] );
+	planeD = computePlaneDValue( planeA, planeB, planeC, screenSpaceVerts[0][X], screenSpaceVerts[0][Y], screenSpaceVerts[0][Z] );
 
 	int startX, startY, endX, endY;
 	// make sure starting pixel value is non-negative
@@ -1095,9 +1097,9 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 			colorPlaneA[compIdx] = interpCrossProd[X];
 			colorPlaneB[compIdx] = interpCrossProd[Y];
 			colorPlaneC[compIdx] = interpCrossProd[Z];
-			colorPlaneD[compIdx] = -( colorPlaneA[compIdx] * edges[0].start.vertex[X] + 
-									  colorPlaneB[compIdx] * edges[0].start.vertex[Y] + 
-									  colorPlaneC[compIdx] * vertColors[edges[0].start.origIdx][compIdx] );
+			colorPlaneD[compIdx] = computePlaneDValue( colorPlaneA[compIdx], colorPlaneB[compIdx], colorPlaneC[compIdx],
+				                                       edges[0].start.vertex[X], edges[0].start.vertex[Y], 
+													   vertColors[edges[0].start.origIdx][compIdx] );
 		}
 		break;
 	case GZ_NORMALS:
@@ -1111,9 +1113,12 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 			imgSpaceVertsPlaneA[compIdx] = interpCrossProd[X];
 			imgSpaceVertsPlaneB[compIdx] = interpCrossProd[Y];
 			imgSpaceVertsPlaneC[compIdx] = interpCrossProd[Z];
-			imgSpaceVertsPlaneD[compIdx] = -( imgSpaceVertsPlaneA[compIdx] * edges[0].start.vertex[X] + 
-				                                imgSpaceVertsPlaneB[compIdx] * edges[0].start.vertex[Y] + 
-										        imgSpaceVertsPlaneC[compIdx] * imageSpaceVerts[edges[0].start.origIdx][compIdx] );
+			imgSpaceVertsPlaneD[compIdx] = computePlaneDValue( imgSpaceVertsPlaneA[compIdx],
+				                                               imgSpaceVertsPlaneB[compIdx],
+															   imgSpaceVertsPlaneC[compIdx],
+															   edges[0].start.vertex[X],
+															   edges[0].start.vertex[Y],
+															   imageSpaceVerts[edges[0].start.origIdx][compIdx] );
 
 			// set up interpolation coefficients for normals
 			interpHelper1[Z] = imageSpaceNormals[edges[0].end.origIdx][compIdx] - imageSpaceNormals[edges[0].start.origIdx][compIdx];
@@ -1122,9 +1127,12 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imag
 			imgSpaceNormalsPlaneA[compIdx] = interpCrossProd[X];
 			imgSpaceNormalsPlaneB[compIdx] = interpCrossProd[Y];
 			imgSpaceNormalsPlaneC[compIdx] = interpCrossProd[Z];
-			imgSpaceNormalsPlaneD[compIdx] = -( imgSpaceNormalsPlaneA[compIdx] * edges[0].start.vertex[X] + 
-				                                imgSpaceNormalsPlaneB[compIdx] * edges[0].start.vertex[Y] + 
-										        imgSpaceNormalsPlaneC[compIdx] * imageSpaceNormals[edges[0].start.origIdx][compIdx] );
+			imgSpaceNormalsPlaneD[compIdx] = computePlaneDValue( imgSpaceNormalsPlaneA[compIdx],
+				                                                 imgSpaceNormalsPlaneB[compIdx],
+															     imgSpaceNormalsPlaneC[compIdx],
+															     edges[0].start.vertex[X],
+															     edges[0].start.vertex[Y],
+															     imageSpaceNormals[edges[0].start.origIdx][compIdx] );
 		}
 		
 		break;
@@ -1689,3 +1697,12 @@ bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord pr
 }
 
 /* END HW4 FUNCTIONS */
+
+/* HW5 FUNCTIONS */
+
+float computePlaneDValue( float planeA, float planeB, float planeC, float screenSpaceX, float screenSpaceY, float paramToInterp )
+{
+	return -( planeA * screenSpaceX + planeB * screenSpaceY + planeC * paramToInterp );
+}
+
+/* END HW5 FUNCTIONS */
