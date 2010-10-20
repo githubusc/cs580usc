@@ -652,9 +652,9 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 			render->spec = *specPower;
 			break;
 		case GZ_TEXTURE_MAP: // texture function
-			GzTexture * textureFunction;
-			textureFunction = ( static_cast<GzTexture *>( valueList[i] ) );
-			render->tex_fun = *textureFunction;
+			GzTexture textureFunction;
+			textureFunction = ( static_cast<GzTexture>( valueList[i] ) );
+			render->tex_fun = textureFunction;
 			break;
 		}
 	}
@@ -1688,12 +1688,42 @@ bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoor
 		vectorAdd( KdComponent, tempKdComp, KdComponent );
 	}
 
+	// the Ka, Kd, and Ks we will use depend upon whether or not we are using textures and what type of shading we're doing
+	GzColor Ka, Kd, Ks;
+	// we're using a texture
+	if( render->tex_fun )
+	{
+		GzColor textureColor;
+		render->tex_fun( textureCoords[U], textureCoords[V], textureColor );
+
+		memcpy( Ka, textureColor, sizeof( GzColor ) );
+		memcpy( Kd, textureColor, sizeof( GzColor ) );
+
+		// if we're doing Gouraud shading, use the texture color for Ks
+		if( render->interp_mode == GZ_COLOR )
+		{
+			memcpy( Ks, textureColor, sizeof( GzColor ) );
+		}
+		// otherwise use the Ks stored in the renderer
+		else
+		{
+			memcpy( Ks, render->Ks, sizeof( GzColor ) );
+		}
+	}
+	// just use the object's color
+	else
+	{
+		memcpy( Ka, render->Ka, sizeof( GzColor ) );
+		memcpy( Kd, render->Kd, sizeof( GzColor ) );
+		memcpy( Ks, render->Ks, sizeof( GzColor ) );
+	}
+
 	// finally, put the shading equation together:
 	//		Color = (Ks * sumOverLights[ lightIntensity ( R dot E )^s ] ) + (Kd * sumOverLights[lightIntensity (N dot L)] ) + ( Ka Ia ) 
 	GzCoord KaComponent;
-	vectorComponentMultiply( render->Ks, KsComponent, KsComponent );
-	vectorComponentMultiply( render->Kd, KdComponent, KdComponent );
-	vectorComponentMultiply( render->Ka, render->ambientlight.color, KaComponent );
+	vectorComponentMultiply( Ks, KsComponent, KsComponent );
+	vectorComponentMultiply( Kd, KdComponent, KdComponent );
+	vectorComponentMultiply( Ka, render->ambientlight.color, KaComponent );
 	
 	// add all components together
 	vectorAdd( KsComponent, KdComponent, colorResult );
