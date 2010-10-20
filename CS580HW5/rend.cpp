@@ -69,6 +69,9 @@ bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord pr
 // from HW5
 float computePlaneDValue( float planeA, float planeB, float planeC, float pixelX, float pixelY, float paramToInterp );
 float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, int pixelX, int pixelY );
+float imgSpaceParamToPerspSpace( float screenSpaceInterpZ, float param );
+float perspSpaceParamToImgSpace( float screenSpaceInterpZ, float param );
+float computeVPrimeZ( float screenSpaceInterpZ );
 // from Professor
 short ctoi( float color );
 /*** END HELPER FUNCTION DECLARATIONS ***/
@@ -1081,6 +1084,7 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 	// interpolation values for Phong shading:
 	GzCoord imgSpaceVertsPlaneA, imgSpaceVertsPlaneB, imgSpaceVertsPlaneC, imgSpaceVertsPlaneD;
 	GzCoord imgSpaceNormalsPlaneA, imgSpaceNormalsPlaneB, imgSpaceNormalsPlaneC, imgSpaceNormalsPlaneD;
+	GzTextureIndex texCoordPlaneA, texCoordPlaneB, texCoordPlaneC, texCoordPlaneD;
 
 	// we'll need to interpolate either colors or normals, so set up the pieces we know now
 	GzCoord interpHelper1, interpHelper2, interpCrossProd;
@@ -1149,6 +1153,24 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 															     edges[0].start.vertex[X],
 															     edges[0].start.vertex[Y],
 															     imageSpaceNormals[edges[0].start.origIdx][compIdx] );
+		}
+
+		// set up interpolation coefficients for texture coordinates
+		for( int texCompIdx = 0; texCompIdx < 2; texCompIdx++ )
+		{
+			// set up interpolation coefficients for U coordinate
+			interpHelper1[Z] = textureCoords[edges[0].end.origIdx][texCompIdx] - textureCoords[edges[0].start.origIdx][texCompIdx];
+			interpHelper2[Z] = textureCoords[edges[1].end.origIdx][texCompIdx] - textureCoords[edges[1].start.origIdx][texCompIdx];
+			vectorCross( interpHelper1, interpHelper2, interpCrossProd );
+			texCoordPlaneA[texCompIdx] = interpCrossProd[X];
+			texCoordPlaneB[texCompIdx] = interpCrossProd[Y];
+			texCoordPlaneC[texCompIdx] = interpCrossProd[Z];
+			texCoordPlaneD[texCompIdx] = computePlaneDValue( texCoordPlaneA[texCompIdx],
+				                                             texCoordPlaneB[texCompIdx],
+															 texCoordPlaneC[texCompIdx],
+															 edges[0].start.vertex[X],
+															 edges[0].start.vertex[Y],
+															 textureCoords[edges[0].start.origIdx][texCompIdx] );
 		}
 		
 		break;
@@ -1251,6 +1273,8 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 					// first we must use bilinear interpolation to find the normal at this pixel
 					GzCoord interpImageSpaceVert, interpImageSpaceNormal;
 					GzTextureIndex interpTextureCoords;
+
+					// interpolate vertices and normals
 					for( int compIdx = 0; compIdx < 3; compIdx++ )
 					{
 						interpImageSpaceVert[compIdx] = interpolateWithPlanCoeffs( imgSpaceVertsPlaneA[compIdx],
@@ -1264,6 +1288,16 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 																				     imgSpaceNormalsPlaneC[compIdx],
 							                                                         imgSpaceNormalsPlaneD[compIdx],
 																				     pixelX, pixelY );
+					}
+
+					// interpolate texture coordinates
+					for( int texCompIdx = 0; texCompIdx < 2; texCompIdx++ )
+					{
+						interpTextureCoords[texCompIdx] = interpolateWithPlanCoeffs( texCoordPlaneA[texCompIdx],
+							                                                         texCoordPlaneB[texCompIdx],
+																					 texCoordPlaneC[texCompIdx],
+							                                                         texCoordPlaneD[texCompIdx],
+																					 pixelX, pixelY );
 					}
 
 					// now that we have the interpolated normal, make sure it's normalized
@@ -1762,6 +1796,21 @@ float computePlaneDValue( float planeA, float planeB, float planeC, float pixelX
 float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, int pixelX, int pixelY )
 {
 	return -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
+}
+
+float imgSpaceParamToPerspSpace( float screenSpaceInterpZ, float param )
+{
+	return param / ( computeVPrimeZ( screenSpaceInterpZ ) + 1 );
+}
+
+float perspSpaceParamToImgSpace( float screenSpaceInterpZ, float param )
+{
+	return param * ( computeVPrimeZ( screenSpaceInterpZ ) + 1 );
+}
+
+float computeVPrimeZ( float screenSpaceInterpZ )
+{
+	return screenSpaceInterpZ / ( INT_MAX - screenSpaceInterpZ );
 }
 
 /* END HW5 FUNCTIONS */
