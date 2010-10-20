@@ -68,7 +68,7 @@ bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum );
 bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod );
 // from HW5
 float computePlaneDValue( float planeA, float planeB, float planeC, float pixelX, float pixelY, float paramToInterp );
-float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, int pixelX, int pixelY );
+float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, float pixelX, float pixelY );
 float imgSpaceParamToPerspSpace( float screenSpaceInterpZ, float param );
 float perspSpaceParamToImgSpace( float screenSpaceInterpZ, float param );
 float computeVPrimeZ( float screenSpaceInterpZ );
@@ -1155,12 +1155,26 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 															     imageSpaceNormals[edges[0].start.origIdx][compIdx] );
 		}
 
+		// in order to set up the interpolation coefficients for the texture coordinates, 
+		// we need to calculate the screen space values of Z for each of the vertices
+		GzTextureIndex perspTextureCoords[3];
+		float screenSpaceZ[3];
+		for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
+		{
+			screenSpaceZ[vertIdx] = interpolateWithPlanCoeffs( planeA, planeB, planeC, planeD, 
+				                                               screenSpaceVerts[vertIdx][X], screenSpaceVerts[vertIdx][Y] );
+
+			// transform affine space (u,v) to perspective space (U,V) to avoid perspective warping
+			perspTextureCoords[vertIdx][U] = imgSpaceParamToPerspSpace( screenSpaceZ[vertIdx], textureCoords[vertIdx][U] );
+			perspTextureCoords[vertIdx][V] = imgSpaceParamToPerspSpace( screenSpaceZ[vertIdx], textureCoords[vertIdx][V] );
+		}
+
 		// set up interpolation coefficients for texture coordinates
 		for( int texCompIdx = 0; texCompIdx < 2; texCompIdx++ )
 		{
-			// set up interpolation coefficients for U coordinate
-			interpHelper1[Z] = textureCoords[edges[0].end.origIdx][texCompIdx] - textureCoords[edges[0].start.origIdx][texCompIdx];
-			interpHelper2[Z] = textureCoords[edges[1].end.origIdx][texCompIdx] - textureCoords[edges[1].start.origIdx][texCompIdx];
+			// set up interpolation coefficients for perspective space texture coordinate
+			interpHelper1[Z] = perspTextureCoords[edges[0].end.origIdx][texCompIdx] - perspTextureCoords[edges[0].start.origIdx][texCompIdx];
+			interpHelper2[Z] = perspTextureCoords[edges[1].end.origIdx][texCompIdx] - perspTextureCoords[edges[1].start.origIdx][texCompIdx];
 			vectorCross( interpHelper1, interpHelper2, interpCrossProd );
 			texCoordPlaneA[texCompIdx] = interpCrossProd[X];
 			texCoordPlaneB[texCompIdx] = interpCrossProd[Y];
@@ -1170,7 +1184,7 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 															 texCoordPlaneC[texCompIdx],
 															 edges[0].start.vertex[X],
 															 edges[0].start.vertex[Y],
-															 textureCoords[edges[0].start.origIdx][texCompIdx] );
+															 perspTextureCoords[edges[0].start.origIdx][texCompIdx] );
 		}
 		
 		break;
@@ -1298,6 +1312,9 @@ bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts,
 																					 texCoordPlaneC[texCompIdx],
 							                                                         texCoordPlaneD[texCompIdx],
 																					 pixelX, pixelY );
+
+						// we need to warp the texture coordinate back to affine space
+						interpTextureCoords[texCompIdx] = perspSpaceParamToImgSpace( interpZ, interpTextureCoords[texCompIdx] );
 					}
 
 					// now that we have the interpolated normal, make sure it's normalized
@@ -1793,7 +1810,7 @@ float computePlaneDValue( float planeA, float planeB, float planeC, float pixelX
 	return -( planeA * pixelX + planeB * pixelY + planeC * paramToInterp );
 }
 
-float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, int pixelX, int pixelY )
+float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, float pixelX, float pixelY )
 {
 	return -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
 }
