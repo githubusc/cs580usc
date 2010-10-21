@@ -3,12 +3,22 @@
 #include	"stdio.h"
 #include	"math.h"
 #include	"Gz.h"
+#include	"WorleyNoise.h"
 
 GzColor	*image;
 int xs, ys;
 int reset = 1;
 
 #define	IMG_ARRAY( x, y, xres )	( x + ( y * xres ) )	/* simplify image indexing */
+#define STONE_THRESHOLD 0.02f
+
+enum StoneType
+{
+	COLORFUL,
+	REALISTIC
+};
+
+StoneType stoneType = COLORFUL;
 
 /* Image texture function */
 int tex_fun(float u, float v, GzColor color)
@@ -101,9 +111,67 @@ int tex_fun(float u, float v, GzColor color)
 }
 
 
-/* Procedural texture function */
+/* Procedural texture function - stone texture */
 int ptex_fun(float u, float v, GzColor color)
 {
-	return 0;
+	// note: in order to make the texture continuous, we need the edges of the texture to all be the same color
+	if( u < .01 || u > .99 || v < .01 || v > .99 )
+	{
+		color[RED] = color[BLUE] = color[GREEN] = 0;
+		return GZ_SUCCESS;
+	}
+
+	float * F = new float[2];
+	float (*delta)[3] = new float[2][3];
+	unsigned long * ID = new unsigned long[2];
+
+	float * at = new float[3];
+
+	// just use texture coordinates for the "at" point
+	at[0] = u * 4;
+	at[1] = v * 4;
+	at[2] = u * v;
+
+	// use Worley noise function to create our texture
+	WorleyNoise::noise3D( at, 2, F, delta, ID );
+	float distance = F[1] - F[0];
+	float colorID = ID[0];
+
+	// clean up allocated memory
+	delete [] F;
+	F = NULL;
+
+	delete [] delta;
+	delta = NULL;
+
+	delete [] ID;
+	ID = NULL;
+
+	delete [] at;
+	at = NULL;
+
+	// use diffuse lighting (if distance <= threshold, leave it black)
+	if( distance > STONE_THRESHOLD ) 
+	{
+		switch( stoneType )
+		{
+		case COLORFUL:
+			color[RED] = max( 0.0f, (1 + sin(colorID))/2 );
+			color[BLUE] = max( 0.0f, (1 + cos(colorID))/2 );
+			color[GREEN] = max( 0.0f, ( color[RED] + color[BLUE] ) / 2 );
+			break;
+		case REALISTIC:
+			// make each stone the same color
+			color[RED] = color[BLUE] = color[GREEN] = 0.3f;
+			break;
+		}
+	}
+	else
+	{
+		// leave color black; this is a dividing line between stones
+		color[RED] = color[GREEN] = color[BLUE] = 0;
+	}
+
+	return GZ_SUCCESS;
 }
 
