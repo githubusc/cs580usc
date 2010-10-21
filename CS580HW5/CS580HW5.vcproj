@@ -494,6 +494,10 @@
 					/>
 				</FileConfiguration>
 			</File>
+			<File
+				RelativePath=".\WorleyNoise.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -553,6 +557,10 @@
 			</File>
 			<File
 				RelativePath="TranslateDlg.h"
+				>
+			</File>
+			<File
+				RelativePath=".\WorleyNoise.h"
 				>
 			</File>
 		</Filter>

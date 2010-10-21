@@ -103,7 +103,7 @@ GzMatrix	rotateY =
 	0.0,	0.0,	0.0,	1.0 
 }; 
 
-#if 1 	/* set up app-defined camera if desired, else use camera defaults */
+#if 0 	/* set up app-defined camera if desired, else use camera defaults */
     camera.position[X] = -3;
     camera.position[Y] = -25;
     camera.position[Z] = -4;
@@ -179,7 +179,7 @@ GzMatrix	rotateY =
 #if 0   /* set up null texture function or valid pointer */
         valueListShader[5] = (GzPointer)0;
 #else
-        valueListShader[5] = (GzPointer)(tex_fun);	/* or use ptex_fun */
+        valueListShader[5] = (GzPointer)(ptex_fun);	/* or use ptex_fun */
 #endif
         status |= GzPutAttribute(m_pRender, 6, nameListShader, valueListShader);
 
