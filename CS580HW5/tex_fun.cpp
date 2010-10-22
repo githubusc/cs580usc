@@ -3,6 +3,8 @@
 #include	"stdio.h"
 #include	"math.h"
 #include	"Gz.h"
+#include	"CustomizablePerlinNoise.h"
+#include	"PerlinNoise.h"
 #include	"WorleyNoise.h"
 
 GzColor	*image;
@@ -11,6 +13,7 @@ int reset = 1;
 
 #define	IMG_ARRAY( x, y, xres )	( x + ( y * xres ) )	/* simplify image indexing */
 #define STONE_THRESHOLD 0.02f
+#define SYMMETRICAL_STONE 0
 
 enum StoneType
 {
@@ -18,7 +21,7 @@ enum StoneType
 	REALISTIC
 };
 
-StoneType stoneType = COLORFUL;
+StoneType stoneType = REALISTIC;
 
 /* Image texture function */
 int tex_fun(float u, float v, GzColor color)
@@ -114,13 +117,33 @@ int tex_fun(float u, float v, GzColor color)
 /* Procedural texture function - stone texture */
 int ptex_fun(float u, float v, GzColor color)
 {
-	// note: in order to make the texture continuous, we need the edges of the texture to all be the same color
-	if( u < .01 || u > .99 || v < .01 || v > .99 )
+	static CustomizablePerlinNoise noiseMaker;
+	static bool initialized = false;
+	if( !initialized )
 	{
-		color[RED] = color[BLUE] = color[GREEN] = 0;
-		return GZ_SUCCESS;
+		noiseMaker.setParams(4, 4, 1, 94);
+		initialized = true;
 	}
 
+	// note: in order to make the texture continuous, we need the edges of the texture to all be the same color
+	float modifiedU, modifiedV;
+	if( SYMMETRICAL_STONE )
+	{
+		modifiedU = ( u < 0.5 ) ? u : 1 - u;
+		modifiedV = ( v < 0.5 ) ? v : 1 - v;
+	}
+	else
+	{
+		if( u < .005 || u > .995 || v < .005 || v > .995 )
+		{
+			color[RED] = color[BLUE] = color[GREEN] = 0;
+			return GZ_SUCCESS;
+		}
+
+		modifiedU = u;
+		modifiedV = v;
+	}
+		
 	float * F = new float[2];
 	float (*delta)[3] = new float[2][3];
 	unsigned long * ID = new unsigned long[2];
@@ -128,9 +151,9 @@ int ptex_fun(float u, float v, GzColor color)
 	float * at = new float[3];
 
 	// just use texture coordinates for the "at" point
-	at[0] = u * 4;
-	at[1] = v * 4;
-	at[2] = u * v;
+	at[0] = modifiedU * 3;
+	at[1] = modifiedV * 3;
+	at[2] = modifiedU * modifiedV;
 
 	// use Worley noise function to create our texture
 	WorleyNoise::noise3D( at, 2, F, delta, ID );
@@ -161,8 +184,10 @@ int ptex_fun(float u, float v, GzColor color)
 			color[GREEN] = max( 0.0f, ( color[RED] + color[BLUE] ) / 2 );
 			break;
 		case REALISTIC:
-			// make each stone the same color
-			color[RED] = color[BLUE] = color[GREEN] = 0.3f;
+			float perlinNoise;
+			perlinNoise = (1 + noiseMaker.Get( modifiedU * 3, modifiedV * 3 )) / 2;
+			// make each stone the same color with some grainy noise variation
+			color[RED] = color[BLUE] = color[GREEN] = perlinNoise * 0.5f;
 			break;
 		}
 	}

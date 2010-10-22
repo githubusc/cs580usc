@@ -333,6 +333,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath=".\CustomizablePerlinNoise.cpp"
+				>
+			</File>
+			<File
 				RelativePath="disp.cpp"
 				>
 				<FileConfiguration
@@ -371,6 +375,10 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\PerlinNoise.cpp"
+				>
 			</File>
 			<File
 				RelativePath="rend.cpp"
@@ -524,6 +532,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\CustomizablePerlinNoise.h"
+				>
+			</File>
+			<File
 				RelativePath="disp.h"
 				>
 			</File>
@@ -533,6 +545,10 @@
 			</File>
 			<File
 				RelativePath="MainFrm.h"
+				>
+			</File>
+			<File
+				RelativePath=".\PerlinNoise.h"
 				>
 			</File>
 			<File
