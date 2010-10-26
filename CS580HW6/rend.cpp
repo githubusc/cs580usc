@@ -737,6 +737,11 @@ Then calls GzPutDisplay() to draw those pixels to the display.
 					triBehindViewPlane = true;
 					break;
 				}
+
+				// now that we have our screen-space vertex, we need to shift it by the offsets associated with this renderer
+				// subtract dx and dy from the pixel X and Y coordinates
+				screenSpaceVerts[vertIdx][X] -= render->pixelXShiftAA;
+				screenSpaceVerts[vertIdx][Y] -= render->pixelYShiftAA;
 			}
 			
 			// we don't need to rasterize this triangle if it's behind the view plane or if it's completely outside of the image plane
