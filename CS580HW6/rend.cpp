@@ -361,6 +361,9 @@ int GzNewRender(GzRender **render, GzRenderClass renderClass, GzDisplay	*display
 	// default to NOT using a texture function.
 	tmpRenderer->tex_fun = 0;
 
+	// default anti-aliasing pixel shifts to 0 (e.g. NO pixel shift)
+	tmpRenderer->pixelXShiftAA = tmpRenderer->pixelYShiftAA = 0;
+
 	// the rest of the struct members will be initialized in GzBeginRender.
 
 	*render = tmpRenderer;
@@ -658,6 +661,16 @@ int GzPutAttribute(GzRender	*render, int numAttributes, GzToken	*nameList,
 			GzTexture textureFunction;
 			textureFunction = ( static_cast<GzTexture>( valueList[i] ) );
 			render->tex_fun = textureFunction;
+			break;
+		case GZ_AASHIFTX: // pixel X shift for anit-aliasing
+			float * pixelXShiftAAPtr;
+			pixelXShiftAAPtr = ( static_cast<float *>( valueList[i] ) );
+			render->pixelXShiftAA = *pixelXShiftAAPtr;
+			break;
+		case GZ_AASHIFTY: // pixel Y shift for anti-aliasing
+			float * pixelYShiftAAPtr;
+			pixelYShiftAAPtr = ( static_cast<float *>( valueList[i] ) );
+			render->pixelXShiftAA = *pixelYShiftAAPtr;
 			break;
 		}
 	}
