@@ -22,6 +22,17 @@ static char THIS_FILE[]=__FILE__;
 #define INFILE  "ppot.asc"
 #define OUTFILE "output.ppm"
 
+#define	AAKERNEL_SIZE	6
+
+float AAFilter[AAKERNEL_SIZE][3] =			/* X, Y, coef */
+{
+	-0.52, 0.38, 0.128,
+	0.41, 0.56, 0.119,
+	0.27, 0.08, 0.294,
+	-0.17, -0.29, 0.249,
+	0.58, -0.55, 0.104,
+	-0.31, -0.71, 0.106
+};
 
 extern int tex_fun(float u, float v, GzColor color); /* image texture function */
 extern int ptex_fun(float u, float v, GzColor color); /* procedural texture function */
