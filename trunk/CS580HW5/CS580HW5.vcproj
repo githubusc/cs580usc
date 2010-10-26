@@ -377,10 +377,6 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\PerlinNoise.cpp"
-				>
-			</File>
-			<File
 				RelativePath="rend.cpp"
 				>
 				<FileConfiguration
@@ -545,10 +541,6 @@
 			</File>
 			<File
 				RelativePath="MainFrm.h"
-				>
-			</File>
-			<File
-				RelativePath=".\PerlinNoise.h"
 				>
 			</File>
 			<File
