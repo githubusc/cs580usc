@@ -4,7 +4,6 @@
 #include	"math.h"
 #include	"Gz.h"
 #include	"CustomizablePerlinNoise.h"
-#include	"PerlinNoise.h"
 #include	"WorleyNoise.h"
 
 GzColor	*image;
