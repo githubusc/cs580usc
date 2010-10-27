@@ -11,6 +11,8 @@
 
 #include "Application.h"
 
+#define	AAKERNEL_SIZE	6
+
 class Application6 : public Application  
 {
 public:
