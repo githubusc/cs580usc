@@ -11,3 +11,5 @@ All of these files have thus been included in my homework submission.
 
 Also, since I extended my HW5 application, I needed to modify the provided Gz.h file to include definitions for GZ_TEXTURE and GzTexture.
 I therefore included this file in my submission as well. Note that no other aspect of the Gz.h API was changed.
+
+Finally, additional changes to the following files were required to support one framebuffer and renderer per anti-aliasing sample:

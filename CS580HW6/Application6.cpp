@@ -22,8 +22,6 @@ static char THIS_FILE[]=__FILE__;
 #define INFILE  "ppot.asc"
 #define OUTFILE "output.ppm"
 
-#define	AAKERNEL_SIZE	6
-
 float AAFilter[AAKERNEL_SIZE][3] =			/* X, Y, coef */
 {
 	-0.52, 0.38, 0.128,
