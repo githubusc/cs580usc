@@ -20,6 +20,9 @@ public:
 	int	Initialize();
 	virtual int Render(); 
 	int Clean();
+
+private:
+	int combineDisplays();
 };
 
 #endif // !defined(AFX_Application6_H__43A7FA9C_6CD6_4A79_9567_2354BFEFAFFB__INCLUDED_)
