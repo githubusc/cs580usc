@@ -60,6 +60,8 @@ int Application6::Initialize()
 	GzPointer   valueListShader[9];		/* shader attribute pointers */
 	GzToken     nameListLights[10];		/* light info */
 	GzPointer   valueListLights[10];
+	GzToken		nameListAntiAliasing[2];	/* anti aliasing attribute names */
+	GzPointer	valueListAntiAliasing[2];	/* anti aliasing attribute pointers */
 	int			shaderType, interpStyle;
 	float		specpower;
 	int		status; 
@@ -116,6 +118,12 @@ GzMatrix	rotateY =
 	// set up the frame buffer used by the application
 	status |= GzNewFrameBuffer(&m_pFrameBuffer, m_nWidth, m_nHeight);
 
+	status |= GzNewDisplay(&m_pAADisplay, GZ_RGBAZ_DISPLAY, m_nWidth, m_nHeight);
+
+	status |= GzGetDisplayParams(m_pAADisplay, &xRes, &yRes, &dispClass); 
+	 
+	status |= GzInitDisplay(m_pAADisplay); 
+
 	// one renderer and one display need to be set up per anit-aliasing sample - make space for them
 	m_pRender = ( GzRender ** )malloc( AAKERNEL_SIZE * sizeof( GzRender * ) );
 	m_pDisplay = ( GzDisplay ** )malloc( AAKERNEL_SIZE * sizeof( GzDisplay * ) );
@@ -131,7 +139,7 @@ GzMatrix	rotateY =
 	 
 		status |= GzNewRender(&( m_pRender[idx] ), GZ_Z_BUFFER_RENDER, m_pDisplay[idx]);
 
-	#if 0 	/* set up app-defined camera if desired, else use camera defaults */
+	#if 1 	/* set up app-defined camera if desired, else use camera defaults */
 		camera.position[X] = -3;
 		camera.position[Y] = -25;
 		camera.position[Z] = -4;
@@ -193,13 +201,21 @@ GzMatrix	rotateY =
 			valueListShader[4] = (GzPointer)&specpower;
 
 			nameListShader[5]  = GZ_TEXTURE_MAP;
-	#if 1   /* set up null texture function or valid pointer */
+	#if 0   /* set up null texture function or valid pointer */
 			valueListShader[5] = (GzPointer)0;
 	#else
-			valueListShader[5] = (GzPointer)(ptex_fun);	/* or use ptex_fun */
+			valueListShader[5] = (GzPointer)(tex_fun);	/* or use ptex_fun */
 	#endif
 			status |= GzPutAttribute(m_pRender[idx], 6, nameListShader, valueListShader);
 
+			/*
+			 * Tokens associated with anti-aliasing
+			 */
+			nameListAntiAliasing[0] = GZ_AASHIFTX;
+			valueListAntiAliasing[0] = ( GzPointer )&( AAFilter[idx][X] );
+			nameListAntiAliasing[1] = GZ_AASHIFTX;
+			valueListAntiAliasing[1]= ( GzPointer )&( AAFilter[idx][Y] );
+			status |= GzPutAttribute(m_pRender[idx], 2, nameListAntiAliasing, valueListAntiAliasing);
 
 		status |= GzPushMatrix(m_pRender[idx], scale);  
 		status |= GzPushMatrix(m_pRender[idx], rotateY); 
@@ -293,10 +309,10 @@ int Application6::Render()
 		}
 	} 
 
-	// TO-DO: change this!
-	int idxToDispay = AAKERNEL_SIZE - 2;
-	GzFlushDisplay2File(outfile, m_pDisplay[idxToDispay]); 	/* write out or update display to file*/
-	GzFlushDisplay2FrameBuffer(m_pFrameBuffer, m_pDisplay[idxToDispay]);	// write out or update display to frame buffer
+	// now we can combine the anti-aliasing samples into a single display
+	combineDisplays();
+	GzFlushDisplay2File(outfile, m_pAADisplay); 	/* write out or update display to file*/
+	GzFlushDisplay2FrameBuffer(m_pFrameBuffer, m_pAADisplay);	// write out or update display to frame buffer
 
 	/* 
 	 * Close file
@@ -329,6 +345,7 @@ int Application6::Clean()
 
 	delete m_pRender;
 	delete m_pDisplay;
+	delete m_pAADisplay;
 	
 	if (status) 
 		return(GZ_FAILURE); 
@@ -336,5 +353,40 @@ int Application6::Clean()
 		return(GZ_SUCCESS);
 }
 
+int Application6::combineDisplays()
+{
+	if( !m_pAADisplay )
+		return GZ_FAILURE;
+
+	for( int idx = 0; idx < AAKERNEL_SIZE; idx++ )
+	{
+		if( ! m_pDisplay[idx] )
+			return GZ_FAILURE;
+	}
+
+	// display rows (Y coords)
+	for( int row = 0; row < m_pAADisplay->xres; row++ )
+	{
+		// display columns (X coords)
+		for( int col = 0; col < m_pAADisplay->yres; col++ )
+		{
+			int fbufIdx = col + ( row * m_pAADisplay->xres );
+			m_pAADisplay->fbuf[fbufIdx].red = 0;
+			m_pAADisplay->fbuf[fbufIdx].green = 0;
+			m_pAADisplay->fbuf[fbufIdx].blue = 0;
+			m_pAADisplay->fbuf[fbufIdx].alpha = 0;
+
+			for( int idx = 0; idx < AAKERNEL_SIZE; idx++ )
+			{
+				m_pAADisplay->fbuf[fbufIdx].red += m_pDisplay[idx]->fbuf[fbufIdx].red * AAFilter[idx][2];
+				m_pAADisplay->fbuf[fbufIdx].green += m_pDisplay[idx]->fbuf[fbufIdx].green * AAFilter[idx][2];
+				m_pAADisplay->fbuf[fbufIdx].blue += m_pDisplay[idx]->fbuf[fbufIdx].blue * AAFilter[idx][2];
+				m_pAADisplay->fbuf[fbufIdx].alpha += m_pDisplay[idx]->fbuf[fbufIdx].alpha * AAFilter[idx][2];
+			}
+		}
+	}
+
+	return GZ_SUCCESS;
+}
 
 

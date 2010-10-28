@@ -22,6 +22,7 @@ public:
 	virtual ~Application();
 	
 public:
+	GzDisplay* m_pAADisplay;	// the combined (anti-aliased) display that will be written out to the frame buffer
 	GzDisplay** m_pDisplay;		// the display - one display needed per anti-aliasing sample
 	GzRender**  m_pRender;		// the renderer - one renderer needed per anti-aliasing sample
 	GzInput*   m_pUserInput;

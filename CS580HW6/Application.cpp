@@ -18,8 +18,9 @@ static char THIS_FILE[]=__FILE__;
 
 Application::Application()
 {
-	m_pDisplay = NULL;		// the display
-	m_pRender = NULL;		// the renderer
+	m_pAADisplay = NULL;	// the main display (combines all of the anti-aliasing sample displays)
+	m_pDisplay = NULL;		// the displays (one per anti-aliasing sample)
+	m_pRender = NULL;		// the renderers (one per anti-aliasing sample)
 	m_pUserInput = NULL;
 	m_pFrameBuffer = NULL;
 }
