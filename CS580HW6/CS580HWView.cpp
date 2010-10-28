@@ -123,15 +123,16 @@ void CCS580HWView::OnRender()
 
 void CCS580HWView::DrawFrameBuffer(CDC *pDC)
 {
-	if(m_pApplication->m_pFrameBuffer == NULL)
-    {
-        return;
-    }
-
-	if(!m_pApplication->m_pRender->open)
-	{
-		AfxMessageBox("Renderer was not opened\n");
+	if( m_pApplication->m_pFrameBuffer == NULL || m_pApplication->m_pRender == NULL )
 		return;
+
+	for( int idx = 0; idx < AAKERNEL_SIZE; idx++ )
+	{
+		if(!m_pApplication->m_pRender[idx]->open)
+		{
+			AfxMessageBox("Renderer was not opened\n");
+			return;
+		}
 	}
 
     HDC hdc;
@@ -162,7 +163,7 @@ void CCS580HWView::DrawFrameBuffer(CDC *pDC)
 	GetDIBits(hdc, m_bitmap, 0, 0, 0, binfo, colors);
     binfo->bmiHeader.biBitCount = 24;
     binfo->bmiHeader.biHeight = -abs(binfo->bmiHeader.biHeight);
-    SetDIBits(hdc, m_bitmap, 0, m_pApplication->m_nHeight, m_pApplication->m_pFrameBuffer, binfo, colors);
+	SetDIBits(hdc, m_bitmap, 0, m_pApplication->m_nHeight, m_pApplication->m_pFrameBuffer, binfo, colors);
 
     ::SetStretchBltMode(pDC->m_hDC, COLORONCOLOR);
     CRect client;
@@ -235,8 +236,12 @@ void CCS580HWView::OnRotate()
 			break;
 		}
 
-		// Accumulate matrix
-		GzPushMatrix(m_pApplication->m_pRender, rotMat); 
+		// must update ALL application renderers (one per anti-aliasing sample)
+		for( int idx = 0; idx < AAKERNEL_SIZE; idx++ )
+		{
+			// Accumulate matrix
+			GzPushMatrix(m_pApplication->m_pRender[idx], rotMat); 
+		}
 	}
 }
 
@@ -272,8 +277,12 @@ void CCS580HWView::OnTranslate()
 		//  Create Translation Matrix
 		GzTrxMat(input->translation, trxMat);
 
-		// Accumulate matrix
-		GzPushMatrix(m_pApplication->m_pRender, trxMat); 
+		// must update ALL application renderers (one per anti-aliasing sample)
+		for( int idx = 0; idx < AAKERNEL_SIZE; idx++ )
+		{
+			// Accumulate matrix
+			GzPushMatrix(m_pApplication->m_pRender[idx], trxMat); 
+		}
 	}
 }
 
@@ -309,7 +318,11 @@ void CCS580HWView::OnScale()
 		//  Create Scaling Matrix
 		GzScaleMat(input->scale, scaleMat);
 
-		// Accumulate matrix
-		GzPushMatrix(m_pApplication->m_pRender, scaleMat); 
+		// must update ALL application renderers (one per anti-aliasing sample)
+		for( int idx = 0; idx < AAKERNEL_SIZE; idx++ )
+		{
+			// Accumulate matrix
+			GzPushMatrix(m_pApplication->m_pRender[idx], scaleMat); 
+		}
 	}
 }
