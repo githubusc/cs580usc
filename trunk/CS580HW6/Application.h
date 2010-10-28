@@ -13,6 +13,8 @@
 #include "disp.h"
 #include "rend.h"
 
+#define	AAKERNEL_SIZE	6
+
 class Application  
 {
 public:
@@ -20,10 +22,10 @@ public:
 	virtual ~Application();
 	
 public:
-	GzDisplay* m_pDisplay;		// the display
-	GzRender*  m_pRender;		// the renderer
+	GzDisplay** m_pDisplay;		// the display - one display needed per anti-aliasing sample
+	GzRender**  m_pRender;		// the renderer - one renderer needed per anti-aliasing sample
 	GzInput*   m_pUserInput;
-	char* m_pFrameBuffer;	// Frame Buffer
+	char* m_pFrameBuffer;	// Frame Buffer 
 	int   m_nWidth;			// width of Frame Buffer
 	int   m_nHeight;		// height of Frame Buffer
 
