@@ -164,7 +164,7 @@ GzMatrix	rotateY =
 	* Select either GZ_COLOR or GZ_NORMALS as interpolation mode  
 	*/
         nameListShader[1]  = GZ_INTERPOLATE;
-        interpStyle = GZ_NORMALS;         /* Phong shading */
+		interpStyle = GZ_COLOR;         /* GZ_COLOR = Gouraud shading; GZ_NORMALS = Phong shading */
         valueListShader[1] = (GzPointer)&interpStyle;
 
         nameListShader[2]  = GZ_AMBIENT_COEFFICIENT;
@@ -176,7 +176,7 @@ GzMatrix	rotateY =
         valueListShader[4] = (GzPointer)&specpower;
 
         nameListShader[5]  = GZ_TEXTURE_MAP;
-#if 0   /* set up null texture function or valid pointer */
+#if 1   /* set up null texture function or valid pointer */
         valueListShader[5] = (GzPointer)0;
 #else
         valueListShader[5] = (GzPointer)(ptex_fun);	/* or use ptex_fun */
