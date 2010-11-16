@@ -123,7 +123,7 @@ int GzInitDisplay(GzDisplay	*display)
 			display->fbuf[idx].blue = 54 << 4;
 
 			// make the pixel completely opaque
-			display->fbuf[idx].alpha = 100;
+			display->fbuf[idx].alpha = 1;
 
 			// use maximum Z value so it will be sure to be overwritten later
 			display->fbuf[idx].z = INT_MAX;
@@ -161,6 +161,11 @@ int GzPutDisplay(GzDisplay *display, int i, int j, GzIntensity r, GzIntensity g,
 		b = 0;
 	else if( b > RGB_MAX_INTENSITY )
 		b = RGB_MAX_INTENSITY;
+
+	if( a < 0 )
+		a = 0;
+	if( a > 1 )
+		a = 1;
 
 	// note: i => columns (X coords), j => rows (Y coords)
 	int idx = ARRAY( i, j );
@@ -251,10 +256,10 @@ int GzFlushDisplay2FrameBuffer(char* framebuffer, GzDisplay *display)
 		return GZ_FAILURE;
 
 	// display rows (Y coords)
-	for( int row = 0; row < display->xres; row++ )
+	for( int row = 0; row < display->yres; row++ )
 	{
 		// display columns (X coords)
-		for( int col = 0; col < display->yres; col++ )
+		for( int col = 0; col < display->xres; col++ )
 		{
 			int fbufIdx = ARRAY( col, row );
 
