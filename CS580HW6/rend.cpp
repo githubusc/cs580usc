@@ -1113,6 +1113,38 @@ bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSp
 	interpHelper2[X] = edges[1].end.vertex[X] - edges[1].start.vertex[X];
 	interpHelper2[Y] = edges[1].end.vertex[Y] - edges[1].start.vertex[Y];
 
+	// in order to set up the interpolation coefficients for the texture coordinates, 
+	// we need to calculate the screen space values of Z for each of the vertices
+	GzTextureIndex perspTextureCoords[3];
+	float screenSpaceZ[3];
+	for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
+	{
+		screenSpaceZ[vertIdx] = interpolateWithPlaneCoeffs( planeA, planeB, planeC, planeD, 
+			                                               screenSpaceVerts[vertIdx][X], screenSpaceVerts[vertIdx][Y] );
+
+		// transform affine space (u,v) to perspective space (U,V) to avoid perspective warping
+		perspTextureCoords[vertIdx][U] = imgSpaceParamToPerspSpace( screenSpaceZ[vertIdx], textureCoords[vertIdx][U] );
+		perspTextureCoords[vertIdx][V] = imgSpaceParamToPerspSpace( screenSpaceZ[vertIdx], textureCoords[vertIdx][V] );
+	}
+
+	// set up interpolation coefficients for texture coordinates
+	for( int texCompIdx = 0; texCompIdx < 2; texCompIdx++ )
+	{
+		// set up interpolation coefficients for perspective space texture coordinate
+		interpHelper1[Z] = perspTextureCoords[edges[0].end.origIdx][texCompIdx] - perspTextureCoords[edges[0].start.origIdx][texCompIdx];
+		interpHelper2[Z] = perspTextureCoords[edges[1].end.origIdx][texCompIdx] - perspTextureCoords[edges[1].start.origIdx][texCompIdx];
+		vectorCross( interpHelper1, interpHelper2, interpCrossProd );
+		texCoordPlaneA[texCompIdx] = interpCrossProd[X];
+		texCoordPlaneB[texCompIdx] = interpCrossProd[Y];
+		texCoordPlaneC[texCompIdx] = interpCrossProd[Z];
+		texCoordPlaneD[texCompIdx] = computePlaneDValue( texCoordPlaneA[texCompIdx],
+			                                             texCoordPlaneB[texCompIdx],
+														 texCoordPlaneC[texCompIdx],
+														 edges[0].start.vertex[X],
+														 edges[0].start.vertex[Y],
+														 perspTextureCoords[edges[0].start.origIdx][texCompIdx] );
+	}
+
 	switch( render->interp_mode )
 	{
 	case GZ_COLOR: // Gouraud shading.
@@ -1172,38 +1204,6 @@ bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSp
 															     edges[0].start.vertex[X],
 															     edges[0].start.vertex[Y],
 															     imageSpaceNormals[edges[0].start.origIdx][compIdx] );
-		}
-
-		// in order to set up the interpolation coefficients for the texture coordinates, 
-		// we need to calculate the screen space values of Z for each of the vertices
-		GzTextureIndex perspTextureCoords[3];
-		float screenSpaceZ[3];
-		for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
-		{
-			screenSpaceZ[vertIdx] = interpolateWithPlaneCoeffs( planeA, planeB, planeC, planeD, 
-				                                               screenSpaceVerts[vertIdx][X], screenSpaceVerts[vertIdx][Y] );
-
-			// transform affine space (u,v) to perspective space (U,V) to avoid perspective warping
-			perspTextureCoords[vertIdx][U] = imgSpaceParamToPerspSpace( screenSpaceZ[vertIdx], textureCoords[vertIdx][U] );
-			perspTextureCoords[vertIdx][V] = imgSpaceParamToPerspSpace( screenSpaceZ[vertIdx], textureCoords[vertIdx][V] );
-		}
-
-		// set up interpolation coefficients for texture coordinates
-		for( int texCompIdx = 0; texCompIdx < 2; texCompIdx++ )
-		{
-			// set up interpolation coefficients for perspective space texture coordinate
-			interpHelper1[Z] = perspTextureCoords[edges[0].end.origIdx][texCompIdx] - perspTextureCoords[edges[0].start.origIdx][texCompIdx];
-			interpHelper2[Z] = perspTextureCoords[edges[1].end.origIdx][texCompIdx] - perspTextureCoords[edges[1].start.origIdx][texCompIdx];
-			vectorCross( interpHelper1, interpHelper2, interpCrossProd );
-			texCoordPlaneA[texCompIdx] = interpCrossProd[X];
-			texCoordPlaneB[texCompIdx] = interpCrossProd[Y];
-			texCoordPlaneC[texCompIdx] = interpCrossProd[Z];
-			texCoordPlaneD[texCompIdx] = computePlaneDValue( texCoordPlaneA[texCompIdx],
-				                                             texCoordPlaneB[texCompIdx],
-															 texCoordPlaneC[texCompIdx],
-															 edges[0].start.vertex[X],
-															 edges[0].start.vertex[Y],
-															 perspTextureCoords[edges[0].start.origIdx][texCompIdx] );
 		}
 		
 		break;
@@ -1292,7 +1292,7 @@ bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSp
 				switch( render->interp_mode )
 				{
 				case GZ_COLOR: // Gourad shading
-					// just interpolate the pre-calculated vertex colors at this pixel
+					// just interpolate the pre-calculated vertex colors at this pixel and multiply it by the texture color if it exists
 					for( int compIdx = 0; compIdx < 3; compIdx++ )
 					{
 						color[compIdx] = interpolateWithPlaneCoeffs( colorPlaneA[compIdx], 
@@ -1301,6 +1301,30 @@ bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSp
 							                                        colorPlaneD[compIdx],
 																	pixelX, pixelY );
 					}
+					
+					// if we're using a texture, we need to incorporate that color in here
+					if( render->tex_fun )
+					{
+						GzTextureIndex interpTextureCoords;
+						// interpolate texture coordinates
+						for( int texCompIdx = 0; texCompIdx < 2; texCompIdx++ )
+						{
+							interpTextureCoords[texCompIdx] = interpolateWithPlaneCoeffs( texCoordPlaneA[texCompIdx],
+																						 texCoordPlaneB[texCompIdx],
+																						 texCoordPlaneC[texCompIdx],
+																						 texCoordPlaneD[texCompIdx],
+																						 pixelX, pixelY );
+
+							// we need to warp the texture coordinate back to affine space
+							interpTextureCoords[texCompIdx] = perspSpaceParamToImgSpace( interpZ, interpTextureCoords[texCompIdx] );
+						}
+
+						GzColor textureColor;
+						render->tex_fun( interpTextureCoords[U], interpTextureCoords[V], textureColor );
+
+						vectorComponentMultiply( color, textureColor, color );
+					}
+
 					break;
 				case GZ_NORMALS: // Phong shading
 					// first we must use bilinear interpolation to find the normal at this pixel
@@ -1758,25 +1782,29 @@ bool computeColor( const GzRender * const render, const GzCoord imageSpaceVert, 
 		vectorAdd( KdComponent, tempKdComp, KdComponent );
 	}
 
+	// flag for using Gouraud texturing
+	bool usingGouraudTexturing = false;
+
 	// the Ka, Kd, and Ks we will use depend upon whether or not we are using textures and what type of shading we're doing
 	GzColor Ka, Kd, Ks;
 	// we're using a texture
 	if( render->tex_fun )
 	{
-		GzColor textureColor;
-		render->tex_fun( textureCoords[U], textureCoords[V], textureColor );
-
-		memcpy( Ka, textureColor, sizeof( GzColor ) );
-		memcpy( Kd, textureColor, sizeof( GzColor ) );
-
-		// if we're doing Gouraud shading, use the texture color for Ks
+		// if we're doing Gouraud shading, we'll eventually use the texture color for Ks, Ka, and Kd...
+		// but we need to delay the the color (K’s) multiplies until we do pixel rasterization where we can do a texture K lookup
 		if( render->interp_mode == GZ_COLOR )
 		{
-			memcpy( Ks, textureColor, sizeof( GzColor ) );
+			usingGouraudTexturing = true;
 		}
-		// otherwise use the Ks stored in the renderer
 		else
 		{
+			GzColor textureColor;
+			render->tex_fun( textureCoords[U], textureCoords[V], textureColor );
+
+			memcpy( Ka, textureColor, sizeof( GzColor ) );
+			memcpy( Kd, textureColor, sizeof( GzColor ) );
+		
+			// use the Ks stored in the renderer
 			memcpy( Ks, render->Ks, sizeof( GzColor ) );
 		}
 	}
@@ -1789,15 +1817,32 @@ bool computeColor( const GzRender * const render, const GzCoord imageSpaceVert, 
 	}
 
 	// finally, put the shading equation together:
-	//		Color = (Ks * sumOverLights[ lightIntensity ( R dot E )^s ] ) + (Kd * sumOverLights[lightIntensity (N dot L)] ) + ( Ka Ia ) 
-	GzCoord KaComponent;
-	vectorComponentMultiply( Ks, KsComponent, KsComponent );
-	vectorComponentMultiply( Kd, KdComponent, KdComponent );
-	vectorComponentMultiply( Ka, render->ambientlight.color, KaComponent );
-	
-	// add all components together
-	vectorAdd( KsComponent, KdComponent, colorResult );
-	vectorAdd( KaComponent, colorResult, colorResult );
+	if( usingGouraudTexturing ) // special case for Gouraud texturing
+	{
+		/*
+		 * For simplicity, we'll set KT = Kd = Ks = Ka for Gouraud textures
+		 * KT is the texture color (RGB triple)
+		 *
+		 * Gouraud or color interpolation is done as light-intensity interpolation from modified vertex shading calculation
+		 * Delay the multiplication of cumulative light intensities by Ka, Kd, Ks 
+		 * We'll multiply by pixel-by-pixel texture color at pixel rasterization time
+		 */
+		// C = (KT) * (sumOverLights[ lightIntensity ( R dot E )^s]  + sumOverLights[ lightIntensity ( N dot L )]) + Ia)
+		vectorAdd( KsComponent, KdComponent, colorResult );
+		vectorAdd( render->ambientlight.color, colorResult, colorResult );
+	}
+	else
+	{
+		// Color = (Ks * sumOverLights[ lightIntensity ( R dot E )^s ] ) + (Kd * sumOverLights[lightIntensity (N dot L)] ) + ( Ka Ia ) 
+		GzCoord KaComponent;
+		vectorComponentMultiply( Ks, KsComponent, KsComponent );
+		vectorComponentMultiply( Kd, KdComponent, KdComponent );
+		vectorComponentMultiply( Ka, render->ambientlight.color, KaComponent );
+		
+		// add all components together
+		vectorAdd( KsComponent, KdComponent, colorResult );
+		vectorAdd( KaComponent, colorResult, colorResult );
+	}
 
 	return true;
 }
