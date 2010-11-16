@@ -68,7 +68,7 @@ bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum );
 bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod );
 // from HW5
 float computePlaneDValue( float planeA, float planeB, float planeC, float pixelX, float pixelY, float paramToInterp );
-float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, float pixelX, float pixelY );
+float interpolateWithPlaneCoeffs( float planeA, float planeB, float planeC, float planeD, float pixelX, float pixelY );
 float imgSpaceParamToPerspSpace( float screenSpaceInterpZ, float param );
 float perspSpaceParamToImgSpace( float screenSpaceInterpZ, float param );
 float computeVPrimeZ( float screenSpaceInterpZ );
@@ -1162,7 +1162,7 @@ bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSp
 		float screenSpaceZ[3];
 		for( int vertIdx = 0; vertIdx < 3; vertIdx++ )
 		{
-			screenSpaceZ[vertIdx] = interpolateWithPlanCoeffs( planeA, planeB, planeC, planeD, 
+			screenSpaceZ[vertIdx] = interpolateWithPlaneCoeffs( planeA, planeB, planeC, planeD, 
 				                                               screenSpaceVerts[vertIdx][X], screenSpaceVerts[vertIdx][Y] );
 
 			// transform affine space (u,v) to perspective space (U,V) to avoid perspective warping
@@ -1251,7 +1251,7 @@ bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSp
 			// if we're here, the pixel should be shaded. 
 			// First interpolate Z and check value against z-buffer
 			// Ax + By + Cz + D = 0 => z = -( Ax + By + D ) / C
-			float interpZ = interpolateWithPlanCoeffs( planeA, planeB, planeC, planeD, pixelX, pixelY );
+			float interpZ = interpolateWithPlaneCoeffs( planeA, planeB, planeC, planeD, pixelX, pixelY );
 
 			// don't render pixels of triangles that reside behind camera
 			if( interpZ < 0 )
@@ -1277,7 +1277,7 @@ bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSp
 					// just interpolate the pre-calculated vertex colors at this pixel
 					for( int compIdx = 0; compIdx < 3; compIdx++ )
 					{
-						color[compIdx] = interpolateWithPlanCoeffs( colorPlaneA[compIdx], 
+						color[compIdx] = interpolateWithPlaneCoeffs( colorPlaneA[compIdx], 
 							                                        colorPlaneB[compIdx],
 																	colorPlaneC[compIdx], 
 							                                        colorPlaneD[compIdx],
@@ -1292,13 +1292,13 @@ bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSp
 					// interpolate vertices and normals
 					for( int compIdx = 0; compIdx < 3; compIdx++ )
 					{
-						interpImageSpaceVert[compIdx] = interpolateWithPlanCoeffs( imgSpaceVertsPlaneA[compIdx],
+						interpImageSpaceVert[compIdx] = interpolateWithPlaneCoeffs( imgSpaceVertsPlaneA[compIdx],
 							                                                       imgSpaceVertsPlaneB[compIdx],
 																				   imgSpaceVertsPlaneC[compIdx],
 							                                                       imgSpaceVertsPlaneD[compIdx],
 																				   pixelX, pixelY );
 
-						interpImageSpaceNormal[compIdx] = interpolateWithPlanCoeffs( imgSpaceNormalsPlaneA[compIdx],
+						interpImageSpaceNormal[compIdx] = interpolateWithPlaneCoeffs( imgSpaceNormalsPlaneA[compIdx],
 							                                                         imgSpaceNormalsPlaneB[compIdx],
 																				     imgSpaceNormalsPlaneC[compIdx],
 							                                                         imgSpaceNormalsPlaneD[compIdx],
@@ -1308,7 +1308,7 @@ bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSp
 					// interpolate texture coordinates
 					for( int texCompIdx = 0; texCompIdx < 2; texCompIdx++ )
 					{
-						interpTextureCoords[texCompIdx] = interpolateWithPlanCoeffs( texCoordPlaneA[texCompIdx],
+						interpTextureCoords[texCompIdx] = interpolateWithPlaneCoeffs( texCoordPlaneA[texCompIdx],
 							                                                         texCoordPlaneB[texCompIdx],
 																					 texCoordPlaneC[texCompIdx],
 							                                                         texCoordPlaneD[texCompIdx],
@@ -1811,7 +1811,7 @@ float computePlaneDValue( float planeA, float planeB, float planeC, float pixelX
 	return -( planeA * pixelX + planeB * pixelY + planeC * paramToInterp );
 }
 
-float interpolateWithPlanCoeffs( float planeA, float planeB, float planeC, float planeD, float pixelX, float pixelY )
+float interpolateWithPlaneCoeffs( float planeA, float planeB, float planeC, float planeD, float pixelX, float pixelY )
 {
 	return -( planeA * pixelX + planeB * pixelY  + planeD ) / planeC;
 }
