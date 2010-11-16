@@ -44,11 +44,11 @@ typedef struct
 // from HW2
 int sortByXCoord( const void * av1, const void * av2 ); // helper function for getting bounding box around tri (used with qsort)
 int sortByYThenXCoord( const void * av1, const void * av2 ); // helper function for sorting tri array vertices (used with qsort)
-bool orderTriVertsCCW( Edge edges[3], GzCoord * verts ); 
-bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, GzCoord * verts );
+bool orderTriVertsCCW( Edge edges[3], const GzCoord * const verts ); 
+bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, const GzCoord * const verts );
 bool getLineEqnCoeff( float * A, float * B, float * C, Edge edge );
 bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 );
-bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, GzCoord * imageSpaceVerts, GzCoord * imageSpaceNormals, GzTextureIndex * textureCoords );
+bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSpaceVerts, const GzCoord * const imageSpaceVerts, const GzCoord * const imageSpaceNormals, const GzTextureIndex * const textureCoords );
 // from HW3
 bool constructCameraXforms( GzRender * render );
 bool constructXsp( GzRender * render );
@@ -63,7 +63,7 @@ bool negateVector( const GzCoord origVec, GzCoord negatedVec );
 bool normalize( GzCoord vector );
 bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts );
 // from HW4
-bool computeColor( GzRender * render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, const GzTextureIndex textureCoords, GzColor colorResult );
+bool computeColor( const GzRender * const render, const GzCoord imageSpaceVerts, const GzCoord imageSpaceNormal, const GzTextureIndex textureCoords, GzColor colorResult );
 bool vectorAdd( const GzCoord vec1, const GzCoord vec2, GzCoord sum ); 
 bool vectorComponentMultiply( const GzCoord vec1, const GzCoord vec2, GzCoord prod );
 // from HW5
@@ -793,7 +793,7 @@ short	ctoi(float color)		/* convert float color to GzIntensity short */
 
 /*** BEGIN HW2 FUNCTIONS ***/
 
-bool orderTriVertsCCW( Edge edges[3], GzCoord * verts )
+bool orderTriVertsCCW( Edge edges[3], const GzCoord * const verts )
 {
 	if( !verts )
 	{
@@ -949,7 +949,7 @@ int sortByXCoord( const void * av1, const void * av2 )
 		return 0;
 }
 
-bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, GzCoord * verts )
+bool getTriBoundingBox( float * minX, float * maxX, float * minY, float * maxY, const GzCoord * const verts )
 {
 	if( !minX || !maxX || !minY || !maxY || !verts )
 	{
@@ -1035,8 +1035,9 @@ bool crossProd( GzCoord result, const Edge edge1, const Edge edge2 )
 	return true;
 }
 
-bool rasterizeLEE( GzRender * render, GzCoord * screenSpaceVerts, 
-				   GzCoord * imageSpaceVerts, GzCoord * imageSpaceNormals, GzTextureIndex * textureCoords )
+bool rasterizeLEE( const GzRender * const render, const GzCoord * const screenSpaceVerts, 
+				   const GzCoord * const imageSpaceVerts, const GzCoord * const imageSpaceNormals, 
+				   const GzTextureIndex * const textureCoords )
 {
 	// get bounding box around triangle
 	float minX, maxX, minY, maxY;
@@ -1664,8 +1665,8 @@ bool triangleOutsideImagePlane( GzRender * render, GzCoord * verts )
 
 /* BEGIN HW4 FUNCTIONS */
 
-bool computeColor( GzRender * render, const GzCoord imageSpaceVert, const GzCoord imageSpaceNormal, const GzTextureIndex textureCoords, 
-				   GzColor colorResult )
+bool computeColor( const GzRender * const render, const GzCoord imageSpaceVert, const GzCoord imageSpaceNormal, 
+				   const GzTextureIndex textureCoords, GzColor colorResult )
 {
 	// check for bad pointer
 	if( !render )
